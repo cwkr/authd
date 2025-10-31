@@ -1,12 +1,13 @@
 package people
 
 import (
-	"github.com/gorilla/sessions"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gorilla/sessions"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthenticPerson struct {
@@ -14,21 +15,21 @@ type AuthenticPerson struct {
 	PasswordHash string `json:"password_hash"`
 }
 
-type embeddedStore struct {
+type inMemoryStore struct {
 	sessionStore sessions.Store
 	users        map[string]AuthenticPerson
 	sessionTTL   int64
 }
 
-func NewEmbeddedStore(sessionStore sessions.Store, users map[string]AuthenticPerson, sessionTTL int64) Store {
-	return &embeddedStore{
+func NewInMemoryStore(sessionStore sessions.Store, users map[string]AuthenticPerson, sessionTTL int64) Store {
+	return &inMemoryStore{
 		sessionStore: sessionStore,
 		users:        users,
 		sessionTTL:   sessionTTL,
 	}
 }
 
-func (e embeddedStore) Authenticate(userID, password string) (string, error) {
+func (e inMemoryStore) Authenticate(userID, password string) (string, error) {
 	var lowercaseUserID = strings.ToLower(userID)
 	var authenticPerson, foundUser = e.users[strings.ToLower(lowercaseUserID)]
 
@@ -43,7 +44,7 @@ func (e embeddedStore) Authenticate(userID, password string) (string, error) {
 	return "", ErrAuthenticationFailed
 }
 
-func (e embeddedStore) IsSessionActive(r *http.Request, sessionName string) (string, bool) {
+func (e inMemoryStore) IsSessionActive(r *http.Request, sessionName string) (string, bool) {
 	var session, _ = e.sessionStore.Get(r, sessionName)
 
 	var uid, sct = session.Values["uid"], session.Values["sct"]
@@ -55,7 +56,7 @@ func (e embeddedStore) IsSessionActive(r *http.Request, sessionName string) (str
 	return "", false
 }
 
-func (e embeddedStore) SaveSession(r *http.Request, w http.ResponseWriter, authTime time.Time, userID, sessionName string) error {
+func (e inMemoryStore) SaveSession(r *http.Request, w http.ResponseWriter, authTime time.Time, userID, sessionName string) error {
 	var session, _ = e.sessionStore.Get(r, sessionName)
 	session.Values["uid"] = userID
 	session.Values["sct"] = authTime.Unix()
@@ -65,7 +66,7 @@ func (e embeddedStore) SaveSession(r *http.Request, w http.ResponseWriter, authT
 	return nil
 }
 
-func (e embeddedStore) Lookup(userID string) (*Person, error) {
+func (e inMemoryStore) Lookup(userID string) (*Person, error) {
 	var authenticPerson, found = e.users[strings.ToLower(userID)]
 
 	if found {
@@ -75,18 +76,18 @@ func (e embeddedStore) Lookup(userID string) (*Person, error) {
 	return nil, ErrPersonNotFound
 }
 
-func (e embeddedStore) Ping() error {
+func (e inMemoryStore) Ping() error {
 	return nil
 }
 
-func (e embeddedStore) ReadOnly() bool {
+func (e inMemoryStore) ReadOnly() bool {
 	return true
 }
 
-func (e embeddedStore) Put(userID string, person *Person) error {
+func (e inMemoryStore) Put(userID string, person *Person) error {
 	return ErrReadOnly
 }
 
-func (e embeddedStore) SetPassword(userID, password string) error {
+func (e inMemoryStore) SetPassword(userID, password string) error {
 	return ErrReadOnly
 }

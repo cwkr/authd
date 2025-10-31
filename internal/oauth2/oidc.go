@@ -2,10 +2,11 @@ package oauth2
 
 import (
 	"encoding/json"
-	"github.com/cwkr/authd/internal/httputil"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/cwkr/authd/internal/httputil"
 )
 
 const OIDCDefaultScope = "openid profile email phone address offline_access"
@@ -24,13 +25,14 @@ type DiscoveryDocument struct {
 	TokenEndpointAuthSigningAlgValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported"`
 	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported,omitempty"`
 	IDTokenSigningAlgValuesSupported           []string `json:"id_token_signing_alg_values_supported"`
-	RevocationEndpoint                         string   `json:"revocation_endpoint"`
-	RevocationEndpointAuthMethodsSupported     []string `json:"revocation_endpoint_auth_methods_supported"`
+	RevocationEndpoint                         string   `json:"revocation_endpoint,omitempty"`
+	RevocationEndpointAuthMethodsSupported     []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
 }
 
 type discoveryDocumentHandler struct {
-	issuer string
-	scope  string
+	issuer                   string
+	scope                    string
+	tokenRevocationSupported bool
 }
 
 func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -64,8 +66,10 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		TokenEndpointAuthSigningAlgValuesSupported: []string{"PS256", "RS256"},
 		CodeChallengeMethodsSupported:              []string{"S256"},
 		IDTokenSigningAlgValuesSupported:           []string{"PS256", "RS256"},
-		RevocationEndpoint:                         baseURL + "/revoke",
-		RevocationEndpointAuthMethodsSupported:     []string{"client_secret_basic", "client_secret_post"},
+	}
+	if d.tokenRevocationSupported {
+		discoveryDocument.RevocationEndpoint = baseURL + "/revoke"
+		discoveryDocument.RevocationEndpointAuthMethodsSupported = []string{"client_secret_basic", "client_secret_post"}
 	}
 	if bytes, err := json.Marshal(discoveryDocument); err != nil {
 		Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
@@ -75,9 +79,10 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func DiscoveryDocumentHandler(issuer, scope string) http.Handler {
+func DiscoveryDocumentHandler(issuer, scope string, tokenRevocationSupported bool) http.Handler {
 	return &discoveryDocumentHandler{
-		issuer: issuer,
-		scope:  scope,
+		issuer:                   issuer,
+		scope:                    scope,
+		tokenRevocationSupported: tokenRevocationSupported,
 	}
 }

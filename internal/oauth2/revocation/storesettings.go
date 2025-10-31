@@ -1,4 +1,4 @@
-package trl
+package revocation
 
 type StoreSettings struct {
 	URI    string `json:"uri,omitempty"`

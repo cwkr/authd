@@ -2,15 +2,16 @@ package people
 
 import (
 	"fmt"
-	"github.com/go-ldap/ldap/v3"
-	"github.com/gorilla/sessions"
 	"log"
 	"net/url"
 	"strings"
+
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gorilla/sessions"
 )
 
 type ldapStore struct {
-	embeddedStore
+	inMemoryStore
 	ldapURL           string
 	baseDN            string
 	bindUser          string
@@ -50,7 +51,7 @@ func NewLdapStore(sessionStore sessions.Store, users map[string]AuthenticPerson,
 	}
 
 	return &ldapStore{
-		embeddedStore: embeddedStore{
+		inMemoryStore: inMemoryStore{
 			sessionStore: sessionStore,
 			users:        users,
 			sessionTTL:   sessionTTL,
@@ -170,7 +171,7 @@ func (p ldapStore) queryDetails(conn *ldap.Conn, userID string) (string, *Person
 }
 
 func (p ldapStore) Authenticate(userID, password string) (string, error) {
-	var realUserID, found = p.embeddedStore.Authenticate(userID, password)
+	var realUserID, found = p.inMemoryStore.Authenticate(userID, password)
 	if found == nil {
 		return realUserID, nil
 	}
@@ -223,7 +224,7 @@ func (p ldapStore) Authenticate(userID, password string) (string, error) {
 }
 
 func (p ldapStore) Lookup(userID string) (*Person, error) {
-	var person, err = p.embeddedStore.Lookup(userID)
+	var person, err = p.inMemoryStore.Lookup(userID)
 	if err == nil {
 		return person, nil
 	}

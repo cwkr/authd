@@ -30,7 +30,7 @@ func (s *sqlClient) Client() *Client {
 }
 
 type sqlStore struct {
-	inMemoryClientStore
+	inMemoryStore
 	dbconn   *sql.DB
 	settings *StoreSettings
 }
@@ -40,26 +40,26 @@ func NewSqlStore(clientMap map[string]Client, dbs map[string]*sql.DB, settings *
 		return nil, err
 	} else {
 		return &sqlStore{
-			inMemoryClientStore: maputil.LowerKeys(clientMap),
-			dbconn:              dbconn,
-			settings:            settings,
+			inMemoryStore: maputil.LowerKeys(clientMap),
+			dbconn:        dbconn,
+			settings:      settings,
 		}, nil
 	}
 }
 
 func (s *sqlStore) Authenticate(clientID, clientSecret string) (*Client, error) {
-	if client, err := s.inMemoryClientStore.Authenticate(clientID, clientSecret); err == nil {
+	if client, err := s.inMemoryStore.Authenticate(clientID, clientSecret); err == nil {
 		return client, nil
 	}
 	if client, err := s.Lookup(clientID); err != nil {
 		return nil, err
 	} else {
-		return s.inMemoryClientStore.compareSecret(client, clientSecret)
+		return s.inMemoryStore.compareSecret(client, clientSecret)
 	}
 }
 
 func (s *sqlStore) Lookup(clientID string) (*Client, error) {
-	if c, err := s.inMemoryClientStore.Lookup(clientID); err == nil {
+	if c, err := s.inMemoryStore.Lookup(clientID); err == nil {
 		return c, nil
 	}
 
@@ -95,7 +95,7 @@ type clientSessionInfo struct {
 
 func (s *sqlStore) PerSessionNameMap(defaultSessionName string) (map[string][]string, error) {
 	var clientsPerSessionName = map[string][]string{}
-	if c, err := s.inMemoryClientStore.PerSessionNameMap(defaultSessionName); err == nil {
+	if c, err := s.inMemoryStore.PerSessionNameMap(defaultSessionName); err == nil {
 		clientsPerSessionName = c
 	} else {
 		return nil, err

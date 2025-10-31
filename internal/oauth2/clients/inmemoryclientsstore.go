@@ -1,18 +1,19 @@
 package clients
 
 import (
+	"strings"
+
 	"github.com/cwkr/authd/internal/maputil"
 	"golang.org/x/crypto/bcrypt"
-	"strings"
 )
 
-type inMemoryClientStore map[string]Client
+type inMemoryStore map[string]Client
 
-func NewInMemoryClientStore(clientMap map[string]Client) Store {
-	return inMemoryClientStore(maputil.LowerKeys(clientMap))
+func NewInMemoryStore(clientMap map[string]Client) Store {
+	return inMemoryStore(maputil.LowerKeys(clientMap))
 }
 
-func (i inMemoryClientStore) compareSecret(client *Client, clientSecret string) (*Client, error) {
+func (i inMemoryStore) compareSecret(client *Client, clientSecret string) (*Client, error) {
 	if clientSecret == "" {
 		return nil, ErrClientSecretRequired
 	}
@@ -30,7 +31,7 @@ func (i inMemoryClientStore) compareSecret(client *Client, clientSecret string) 
 	return client, nil
 }
 
-func (i inMemoryClientStore) Authenticate(clientID, clientSecret string) (*Client, error) {
+func (i inMemoryStore) Authenticate(clientID, clientSecret string) (*Client, error) {
 	if client, err := i.Lookup(clientID); err != nil {
 		return nil, err
 	} else {
@@ -38,14 +39,14 @@ func (i inMemoryClientStore) Authenticate(clientID, clientSecret string) (*Clien
 	}
 }
 
-func (i inMemoryClientStore) Lookup(clientID string) (*Client, error) {
+func (i inMemoryStore) Lookup(clientID string) (*Client, error) {
 	if client, clientExists := i[strings.ToLower(clientID)]; clientExists {
 		return &client, nil
 	}
 	return nil, ErrClientNotFound
 }
 
-func (i inMemoryClientStore) PerSessionNameMap(defaultSessionName string) (map[string][]string, error) {
+func (i inMemoryStore) PerSessionNameMap(defaultSessionName string) (map[string][]string, error) {
 	var clientsPerSessionName = map[string][]string{}
 	for clientID, client := range i {
 		if client.SessionName != "" {
@@ -59,6 +60,6 @@ func (i inMemoryClientStore) PerSessionNameMap(defaultSessionName string) (map[s
 	return clientsPerSessionName, nil
 }
 
-func (i inMemoryClientStore) Ping() error {
+func (i inMemoryStore) Ping() error {
 	return nil
 }

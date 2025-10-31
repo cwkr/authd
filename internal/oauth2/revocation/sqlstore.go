@@ -1,12 +1,13 @@
-package trl
+package revocation
 
 import (
 	"database/sql"
 	"errors"
-	"github.com/blockloop/scan/v2"
-	"github.com/cwkr/authd/internal/sqlutil"
 	"log"
 	"time"
+
+	"github.com/blockloop/scan/v2"
+	"github.com/cwkr/authd/internal/sqlutil"
 )
 
 type sqlStore struct {

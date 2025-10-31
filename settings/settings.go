@@ -6,16 +6,17 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/cwkr/authd/internal/oauth2"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/trl"
-	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/stringutil"
-	"github.com/cwkr/authd/keyset"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cwkr/authd/internal/oauth2"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/oauth2/revocation"
+	"github.com/cwkr/authd/internal/people"
+	"github.com/cwkr/authd/internal/stringutil"
+	"github.com/cwkr/authd/keyset"
 )
 
 type CustomPeopleAPI struct {
@@ -49,7 +50,8 @@ type Server struct {
 	PeopleAPIRequireAuthN   bool                              `json:"people_api_require_authn,omitempty"`
 	LoginTemplate           string                            `json:"login_template,omitempty"`
 	LogoutTemplate          string                            `json:"logout_template,omitempty"`
-	TRLStore                *trl.StoreSettings                `json:"trl_store,omitempty"`
+	RevocationStore         *revocation.StoreSettings         `json:"revocation_store,omitempty"`
+	EnableTokenRevocation   bool                              `json:"enable_token_revocation,omitempty"`
 	KeysTTL                 int                               `json:"keys_ttl,omitempty"`
 	Roles                   oauth2.RoleMappings               `json:"roles,omitempty"`
 	rsaSigningKey           *rsa.PrivateKey

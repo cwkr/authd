@@ -1,20 +1,21 @@
 package oauth2
 
 import (
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/trl"
-	"github.com/cwkr/authd/internal/stringutil"
 	"log"
 	"net/http"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/oauth2/revocation"
+	"github.com/cwkr/authd/internal/stringutil"
 )
 
 type revokeHandler struct {
-	tokenCreator TokenCreator
-	trlStore     trl.Store
-	clientStore  clients.Store
+	tokenCreator    TokenCreator
+	revocationStore revocation.Store
+	clientStore     clients.Store
 }
 
 func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +66,7 @@ func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Error(w, ErrorInvalidRequest, "token without id (jti)", http.StatusInternalServerError)
 			return
 		}
-		if err := j.trlStore.Put(claims.TokenID, claims.Expiry.Time()); err != nil {
+		if err := j.revocationStore.Put(claims.TokenID, claims.Expiry.Time()); err != nil {
 			log.Printf("!!! %s", err)
 			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return
@@ -77,10 +78,10 @@ func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func RevokeHandler(tokenCreator TokenCreator, clientStore clients.Store, trlStore trl.Store) http.Handler {
+func RevokeHandler(tokenCreator TokenCreator, clientStore clients.Store, revocationStore revocation.Store) http.Handler {
 	return &revokeHandler{
-		tokenCreator: tokenCreator,
-		clientStore:  clientStore,
-		trlStore:     trlStore,
+		tokenCreator:    tokenCreator,
+		clientStore:     clientStore,
+		revocationStore: revocationStore,
 	}
 }

@@ -5,12 +5,20 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
 	"github.com/cwkr/authd/internal/fileutil"
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/maputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/trl"
+	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server"
 	"github.com/cwkr/authd/internal/sqlutil"
@@ -20,13 +28,6 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/hjson/hjson-go/v4"
 	"golang.org/x/crypto/bcrypt"
-	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 )
 
 var version = "v0.7.x"
@@ -37,7 +38,7 @@ func main() {
 		tokenCreator         oauth2.TokenCreator
 		accessTokenValidator middleware.AccessTokenValidator
 		peopleStore          people.Store
-		trlStore             trl.Store
+		revocationStore      revocation.Store
 		clientStore          clients.Store
 		err                  error
 		configFilename       string
@@ -250,10 +251,10 @@ func main() {
 				log.Fatalf("!!! %s", err)
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty store uri: %s", serverSettings.PeopleStore.URI)
+			log.Fatalf("!!! unsupported or empty people_store.uri: %s", serverSettings.PeopleStore.URI)
 		}
 	} else {
-		peopleStore = people.NewEmbeddedStore(sessionStore, users, int64(serverSettings.SessionTTL))
+		peopleStore = people.NewInMemoryStore(sessionStore, users, int64(serverSettings.SessionTTL))
 	}
 
 	if serverSettings.ClientStore != nil {
@@ -262,22 +263,22 @@ func main() {
 				log.Fatalf("!!! %s", err)
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty store uri: %s", serverSettings.ClientStore.URI)
+			log.Fatalf("!!! unsupported or empty client_store.uri: %s", serverSettings.ClientStore.URI)
 		}
 	} else {
-		clientStore = clients.NewInMemoryClientStore(serverSettings.Clients)
+		clientStore = clients.NewInMemoryStore(serverSettings.Clients)
 	}
 
-	if serverSettings.TRLStore != nil {
-		if sqlutil.IsDatabaseURI(serverSettings.TRLStore.URI) {
-			if trlStore, err = trl.NewSqlStore(dbs, serverSettings.TRLStore); err != nil {
-				log.Fatalf("!!! %s", err)
-			}
-		} else {
-			log.Fatalf("!!! unsupported or empty store uri: %s", serverSettings.TRLStore.URI)
+	if serverSettings.EnableTokenRevocation {
+		if serverSettings.RevocationStore == nil {
+			log.Fatal("!!! revocation_store.uri must be specified to enable token revocation")
 		}
-	} else {
-		trlStore = trl.NewNoopStore()
+		if !sqlutil.IsDatabaseURI(serverSettings.RevocationStore.URI) {
+			log.Fatalf("!!! unsupported or empty revocation_store.uri: %s", serverSettings.RevocationStore.URI)
+		}
+		if revocationStore, err = revocation.NewSqlStore(dbs, serverSettings.RevocationStore); err != nil {
+			log.Fatalf("!!! %s", err)
+		}
 	}
 
 	var router = mux.NewRouter()
@@ -305,17 +306,19 @@ func main() {
 
 	router.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider())).
 		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, trlStore, scope)).
+	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, scope)).
 		Methods(http.MethodOptions, http.MethodPost)
 	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, peopleStore, clientStore, scope, serverSettings.SessionName)).
 		Methods(http.MethodGet)
-	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope)).
+	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation)).
 		Methods(http.MethodGet, http.MethodOptions)
 	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserInfoHandler(peopleStore, serverSettings.AccessTokenExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
 
-	router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, trlStore)).
-		Methods(http.MethodPost, http.MethodOptions)
+	if serverSettings.EnableTokenRevocation {
+		router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore)).
+			Methods(http.MethodPost, http.MethodOptions)
+	}
 
 	if !serverSettings.DisableAPI {
 		var lookupPersonHandler = server.LookupPersonHandler(peopleStore,

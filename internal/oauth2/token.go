@@ -6,24 +6,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/pkce"
-	"github.com/cwkr/authd/internal/oauth2/trl"
-	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/stringutil"
 	"log"
 	"net/http"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/oauth2/pkce"
+	"github.com/cwkr/authd/internal/oauth2/revocation"
+	"github.com/cwkr/authd/internal/people"
+	"github.com/cwkr/authd/internal/stringutil"
 )
 
 type tokenHandler struct {
-	tokenService TokenCreator
-	peopleStore  people.Store
-	clientStore  clients.Store
-	trlStore     trl.Store
-	scope        string
+	tokenService    TokenCreator
+	peopleStore     people.Store
+	clientStore     clients.Store
+	revocationStore revocation.Store
+	scope           string
 }
 
 func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +160,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var refreshClaims, refreshTokenErr = t.tokenService.Verify(refreshToken, TokenTypeRefreshToken)
 		if refreshTokenErr == nil {
-			revokedToken, _ := t.trlStore.Lookup(refreshClaims.TokenID)
+			revokedToken, _ := t.revocationStore.Lookup(refreshClaims.TokenID)
 			if revokedToken != nil {
 				refreshTokenErr = errors.New("refresh token has been revoked")
 			}
@@ -180,7 +181,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Start("jwtgen")
 		accessToken, _ = t.tokenService.GenerateAccessToken(user, refreshClaims.UserID, clientID, refreshClaims.Scope)
 		if client.EnableRefreshTokenRotation && strings.Contains(refreshClaims.Scope, "offline_access") {
-			_ = t.trlStore.Put(refreshClaims.TokenID, refreshClaims.Expiry.Time())
+			_ = t.revocationStore.Put(refreshClaims.TokenID, refreshClaims.Expiry.Time())
 			refreshToken, _ = t.tokenService.GenerateRefreshToken(refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce)
 		} else {
 			refreshToken = ""
@@ -225,12 +226,12 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(bytes)
 }
 
-func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, trlStore trl.Store, scope string) http.Handler {
+func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, revocationStore revocation.Store, scope string) http.Handler {
 	return &tokenHandler{
-		tokenService: tokenService,
-		peopleStore:  peopleStore,
-		clientStore:  clientStore,
-		trlStore:     trlStore,
-		scope:        scope,
+		tokenService:    tokenService,
+		peopleStore:     peopleStore,
+		clientStore:     clientStore,
+		revocationStore: revocationStore,
+		scope:           scope,
 	}
 }

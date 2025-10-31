@@ -12,7 +12,7 @@ import (
 )
 
 type sqlStore struct {
-	embeddedStore
+	inMemoryStore
 	dbconn   *sql.DB
 	settings *StoreSettings
 }
@@ -48,7 +48,7 @@ func NewSqlStore(sessionStore sessions.Store, users map[string]AuthenticPerson, 
 		return nil, err
 	} else {
 		return &sqlStore{
-			embeddedStore: embeddedStore{
+			inMemoryStore: inMemoryStore{
 				sessionStore: sessionStore,
 				users:        users,
 				sessionTTL:   sessionTTL,
@@ -100,7 +100,7 @@ func (p sqlStore) queryDetails(userID string) (*Person, error) {
 }
 
 func (p sqlStore) Authenticate(userID, password string) (string, error) {
-	var realUserID, err = p.embeddedStore.Authenticate(userID, password)
+	var realUserID, err = p.inMemoryStore.Authenticate(userID, password)
 	if err == nil {
 		return realUserID, nil
 	}
@@ -126,7 +126,7 @@ func (p sqlStore) Authenticate(userID, password string) (string, error) {
 }
 
 func (p sqlStore) Lookup(userID string) (*Person, error) {
-	var person, err = p.embeddedStore.Lookup(userID)
+	var person, err = p.inMemoryStore.Lookup(userID)
 	if err == nil {
 		return person, nil
 	}

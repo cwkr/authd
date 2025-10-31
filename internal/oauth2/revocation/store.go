@@ -1,4 +1,4 @@
-package trl
+package revocation
 
 import (
 	"time"
