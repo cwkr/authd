@@ -8,6 +8,7 @@ type Person struct {
 	GivenName     string   `json:"given_name,omitempty"`
 	Groups        []string `json:"groups,omitempty"`
 	PhoneNumber   string   `json:"phone_number,omitempty"`
+	RoomNumber    string   `json:"room_number,omitempty"`
 	StreetAddress string   `json:"street_address,omitempty"`
 	Locality      string   `json:"locality,omitempty"`
 	PostalCode    string   `json:"postal_code,omitempty"`

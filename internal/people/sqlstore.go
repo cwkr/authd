@@ -3,12 +3,13 @@ package people
 import (
 	"database/sql"
 	"errors"
+	"log"
+	"strings"
+
 	"github.com/blockloop/scan/v2"
 	"github.com/cwkr/authd/internal/sqlutil"
 	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
-	"log"
-	"strings"
 )
 
 type sqlStore struct {
@@ -24,6 +25,7 @@ type PersonDetails struct {
 	FamilyName    sql.NullString `db:"family_name"`
 	GivenName     sql.NullString `db:"given_name"`
 	PhoneNumber   sql.NullString `db:"phone_number"`
+	RoomNumber    sql.NullString `db:"room_number"`
 	StreetAddress sql.NullString `db:"street_address"`
 	Locality      sql.NullString `db:"locality"`
 	PostalCode    sql.NullString `db:"postal_code"`
@@ -37,6 +39,7 @@ func (p PersonDetails) Person() *Person {
 		FamilyName:    p.FamilyName.String,
 		GivenName:     p.GivenName.String,
 		PhoneNumber:   p.PhoneNumber.String,
+		RoomNumber:    p.RoomNumber.String,
 		StreetAddress: p.StreetAddress.String,
 		Locality:      p.Locality.String,
 		PostalCode:    p.PostalCode.String,
@@ -84,7 +87,7 @@ func (p sqlStore) queryDetails(userID string) (*Person, error) {
 
 	log.Printf("SQL: %s; -- %s", p.settings.DetailsQuery, userID)
 	// SELECT given_name, family_name, email, TO_CHAR(birthdate, 'YYYY-MM-DD') birthdate, department,
-	// phone_number, street_address, locality, postal_code
+	// phone_number, room_number, street_address, locality, postal_code
 	// FROM people WHERE lower(user_id) = lower($1)
 	if rows, err := p.dbconn.Query(p.settings.DetailsQuery, userID); err == nil {
 		if err := scan.RowStrict(&personDetails, rows); err != nil {
@@ -158,12 +161,13 @@ func (p sqlStore) ReadOnly() bool {
 
 func (p sqlStore) Put(userID string, person *Person) error {
 	// UPDATE people SET given_name = $2, family_name = $3, email = $4, department = $5,
-	// birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, locality = $8, street_address = $9, postal_code = $10,
-	// last_modified = now() WHERE lower(user_id) = lower($1)
+	// birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, room_number = $8, street_address = $9, locality = $10,
+	// postal_code = $11, last_modified = now() WHERE lower(user_id) = lower($1)
 	log.Printf(
-		"SQL: %s; -- %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
+		"SQL: %s; -- %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
 		p.settings.Update, userID, person.GivenName, person.FamilyName, person.Email, person.Department,
-		person.Birthdate, person.PhoneNumber, person.StreetAddress, person.Locality, person.PostalCode,
+		person.Birthdate, person.PhoneNumber, person.RoomNumber,
+		person.StreetAddress, person.Locality, person.PostalCode,
 	)
 	if _, err := p.dbconn.Exec(
 		p.settings.Update,
@@ -174,6 +178,7 @@ func (p sqlStore) Put(userID string, person *Person) error {
 		strings.TrimSpace(person.Department),
 		strings.TrimSpace(person.Birthdate),
 		strings.TrimSpace(person.PhoneNumber),
+		strings.TrimSpace(person.RoomNumber),
 		strings.TrimSpace(person.StreetAddress),
 		strings.TrimSpace(person.Locality),
 		strings.TrimSpace(person.PostalCode),
@@ -183,13 +188,13 @@ func (p sqlStore) Put(userID string, person *Person) error {
 	return nil
 }
 
-func (p sqlStore) SetPassword(userID, password string) error {
+func (p sqlStore) ChangePassword(userID, password string) error {
 	if passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 5); err != nil {
 		return err
 	} else {
 		// UPDATE people SET password_hash = $2, last_modified = now() WHERE lower(user_id) = lower($1)
-		log.Printf("SQL: %s; -- %s", p.settings.SetPassword, userID)
-		if _, err := p.dbconn.Exec(p.settings.SetPassword, userID, passwordHash); err != nil {
+		log.Printf("SQL: %s; -- %s", p.settings.ChangePasswordQuery, userID)
+		if _, err := p.dbconn.Exec(p.settings.ChangePasswordQuery, userID, passwordHash); err != nil {
 			return err
 		}
 	}

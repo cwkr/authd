@@ -92,6 +92,7 @@ and will load it's content when found.
 | `$roles_space_delimited`      |
 | `$roles_comma_delimited`      |
 | `$roles_semicolon_delimited`  |
+| `$room_number`                |
 | `$street_address`             |
 | `$user_id`                    |
 
@@ -127,6 +128,7 @@ Client column names are mapped by name:
 | `birthdate`      |
 | `department`     |
 | `phone_number`   |
+| `room_number`    |
 | `street_address` |
 | `locality`       |
 | `postal_code`    |
@@ -137,8 +139,8 @@ Client column names are mapped by name:
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
     "credentials_query": "SELECT user_id, password_hash FROM people WHERE lower(user_id) = lower($1)",
     "groups_query": "SELECT UNNEST(groups) FROM people WHERE lower(user_id) = lower($1)",
-    "details_query": "SELECT given_name, family_name, email, TO_CHAR(birthdate, 'YYYY-MM-DD') birthdate, department, phone_number, street_address, locality, postal_code FROM people WHERE lower(user_id) = lower($1)",
-    "update": "UPDATE people SET given_name = $2, family_name = $3, email = $4, department = $5, birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, locality = $8, street_address = $9, postal_code = $10, last_modified = now() WHERE lower(user_id) = lower($1)",
+    "details_query": "SELECT given_name, family_name, email, TO_CHAR(birthdate, 'YYYY-MM-DD') birthdate, department, phone_number, room_number, street_address, locality, postal_code FROM people WHERE lower(user_id) = lower($1)",
+    "update": "UPDATE people SET given_name = $2, family_name = $3, email = $4, department = $5, birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, room_number = $8, street_address = $9, locality = $10, postal_code = $11, last_modified = now() WHERE lower(user_id) = lower($1)",
     "set_password": "UPDATE people SET password_hash = $2, last_modified = now() WHERE lower(user_id) = lower($1)"
   }
 }
@@ -181,6 +183,7 @@ Client column names are mapped case-sensitive by name:
 | `birthdate`      |
 | `department`     |
 | `phone_number`   |
+| `room_number`    |
 | `street_address` |
 | `locality`       |
 | `postal_code`    |
@@ -192,7 +195,7 @@ Client column names are mapped case-sensitive by name:
     "credentials_query": "SELECT user_id, password_hash FROM people WHERE lower(user_id) = lower(:1)",
     "groups_query": "SELECT grp.group_id FROM people_groups pg LEFT JOIN groups grp ON pg.group_id = grp.group_id WHERE lower(pg.user_id) = lower(:1)",
     "details_query": "SELECT given_name \"given_name\", family_name \"family_name\", email \"email\", TO_CHAR(birthdate, 'YYYY-MM-DD') \"birthdate\", department \"department\", phone_number \"phone_number\", street_address \"street_address\", locality \"locality\", postal_code \"postal_code\" FROM people WHERE lower(user_id) = lower(:1)",
-    "update": "UPDATE people SET given_name = :2, family_name = :3, email = :4, department = :5, birthdate = TO_DATE(:6, 'YYYY-MM-DD'), phone_number = :7, locality = :8, street_address = :9, postal_code = :10, last_modified = now() WHERE lower(user_id) = lower(:1)",
+    "update": "UPDATE people SET given_name = :2, family_name = :3, email = :4, department = :5, birthdate = TO_DATE(:6, 'YYYY-MM-DD'), phone_number = :7, room_number = :8, street_address = :9, locality = :10, postal_code = :11, last_modified = now() WHERE lower(user_id) = lower(:1)",
     "set_password": "UPDATE people SET password_hash = :2, last_modified = now() WHERE lower(user_id) = lower(:1)"
   }
 }
@@ -226,12 +229,12 @@ Client column names are mapped case-sensitive by name:
 ```jsonc
 {
   "people_store": {
-    "uri": "ldaps://cn=access_user,cn=Users,dc=example,dc=org:trustno1@oid.example.org:3070",
+    // use "+" for space in username
+    "uri": "ldaps://cn=access_user,cn=Users,dc=example,dc=org:trustno1@oid.example.org:3070/dc=example,dc=org?read-only=true",
     "credentials_query": "(&(objectClass=person)(uid=%s))",
     "groups_query": "(&(objectClass=groupOfUniqueNames)(uniquemember=%s))",
     "details_query": "(&(objectClass=person)(uid=%s))",
     "parameters": {
-      "base_dn": "dc=example,dc=org",
       "user_id_attribute": "uid",
       // group ids will be full distinguished names like "cn=admin,cn=groups,dc=example,dc=org"
       // group ids would be only group name when group_id_attribute is "dc", but group names are not unique in OID
@@ -241,6 +244,7 @@ Client column names are mapped case-sensitive by name:
       "family_name_attribute": "sn",
       "given_name_attribute": "givenname",
       "phone_number_attribute": "telephonenumber",
+      "room_number_attribute": "roomnumber",
       "street_address_attribute": "street",
       "locality_attribute": "l",
       "postal_code_attribute": "postalcode"

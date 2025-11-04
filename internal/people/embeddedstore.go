@@ -88,6 +88,6 @@ func (e inMemoryStore) Put(userID string, person *Person) error {
 	return ErrReadOnly
 }
 
-func (e inMemoryStore) SetPassword(userID, password string) error {
+func (e inMemoryStore) ChangePassword(userID, password string) error {
 	return ErrReadOnly
 }

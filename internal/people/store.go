@@ -13,5 +13,5 @@ type Store interface {
 	Ping() error
 	ReadOnly() bool
 	Put(userID string, person *Person) error
-	SetPassword(userID, password string) error
+	ChangePassword(userID, password string) error
 }

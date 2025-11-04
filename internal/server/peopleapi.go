@@ -3,17 +3,18 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"log"
+	"net/http"
+	"slices"
+	"strings"
+
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/settings"
 	"github.com/gorilla/mux"
-	"io"
-	"log"
-	"net/http"
-	"slices"
-	"strings"
 )
 
 const ErrorAccessDenied = "access_denied"
@@ -193,7 +194,7 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 			return
 		}
 
-		if err := peopleStore.SetPassword(userID, passwordChange.NewPassword); err != nil {
+		if err := peopleStore.ChangePassword(userID, passwordChange.NewPassword); err != nil {
 			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return

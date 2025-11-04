@@ -63,6 +63,8 @@ func AddExtraClaims(claims map[string]any, extraClaims map[string]string, user U
 				return strings.Join(roleMappings.Roles(user), ",")
 			case "roles_semicolon_delimited":
 				return strings.Join(roleMappings.Roles(user), ";")
+			case "room_number":
+				return user.RoomNumber
 			case "street_address":
 				return user.StreetAddress
 			case "user_id":
