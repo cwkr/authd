@@ -2,18 +2,19 @@ package server
 
 import (
 	_ "embed"
-	"github.com/cwkr/authd/internal/htmlutil"
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/settings"
-	"github.com/go-jose/go-jose/v3/jwt"
-	"github.com/gorilla/sessions"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/cwkr/authd/internal/htmlutil"
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/settings"
+	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/gorilla/sessions"
 )
 
 //go:embed templates/logout.gohtml
@@ -40,7 +41,6 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 
 	var (
-		session, _  = l.sessionStore.Get(r, l.serverSettings.SessionName)
 		clientID    = strings.TrimSpace(r.FormValue("client_id"))
 		redirectURI = strings.TrimSpace(r.FormValue("post_logout_redirect_uri"))
 		idTokenHint = strings.TrimSpace(r.FormValue("id_token_hint"))
@@ -50,8 +50,8 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if token, err := jwt.ParseSigned(idTokenHint); err == nil {
 			var claims = jwt.Claims{}
 			if err := token.UnsafeClaimsWithoutVerification(&claims); err == nil {
-				if len([]string(claims.Audience)) > 1 && claims.Issuer == l.serverSettings.Issuer {
-					clientID = claims.Audience[1]
+				if len([]string(claims.Audience)) > 0 && claims.Issuer == l.serverSettings.Issuer {
+					clientID = claims.Audience[0]
 				}
 			}
 		}
@@ -79,9 +79,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if client.SessionName != "" {
-		session, _ = l.sessionStore.Get(r, client.SessionName)
-	}
+	var session, _ = l.sessionStore.Get(r, l.serverSettings.Realms[client.Realm].SessionName)
 
 	httputil.NoCache(w)
 

@@ -4,12 +4,16 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"os"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/cwkr/authd/internal/oauth2/realms"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/oklog/ulid/v2"
-	"strings"
-	"time"
 )
 
 const (
@@ -24,7 +28,10 @@ const (
 	ResponseTypeToken     = "token"
 )
 
-var ErrInvalidTokenType = errors.New("invalid token type (typ)")
+var (
+	ErrInvalidTokenType     = errors.New("invalid token type (typ)")
+	ErrUnsupportedAlgorithm = errors.New("unsupported token signing algorithm")
+)
 
 type User struct {
 	people.Person
@@ -33,7 +40,7 @@ type User struct {
 
 type VerifiedClaims struct {
 	UserID    string           `json:"user_id"`
-	ClientID  string           `json:"client_id"`
+	ClientID  string           `json:"cid"`
 	TokenID   string           `json:"jti"`
 	Type      string           `json:"typ"`
 	Scope     string           `json:"scope"`
@@ -48,37 +55,36 @@ func NewTokenID(timestamp time.Time) string {
 }
 
 type TokenCreator interface {
-	GenerateAccessToken(user User, subject, clientID, scope string) (string, error)
-	GenerateIDToken(user User, clientID, scope, accessTokenHash, nonce string) (string, error)
-	GenerateAuthCode(userID, clientID, scope, challenge, nonce string) (string, error)
-	GenerateRefreshToken(userID, clientID, scope, nonce string) (string, error)
+	GenerateAccessToken(user User, algorithm, subject, clientID, scope string) (string, error)
+	GenerateIDToken(user User, algorithm, clientID, scope, accessTokenHash, nonce string) (string, error)
+	GenerateAuthCode(algorithm, userID, clientID, scope, challenge, nonce string) (string, error)
+	GenerateRefreshToken(algorithm, userID, clientID, scope, nonce string) (string, error)
 	Verify(rawToken, tokenType string) (*VerifiedClaims, error)
-	AccessTokenTTL() int64
 	Issuer() string
 }
 
 type tokenCreator struct {
-	privateKey             *rsa.PrivateKey
-	signer                 jose.Signer
-	issuer                 string
-	scope                  string
-	accessTokenTTL         int64
-	refreshTokenTTL        int64
-	idTokenTTL             int64
-	accessTokenExtraClaims map[string]string
-	idTokenExtraClaims     map[string]string
-	roleMappings           RoleMappings
+	privateKey   *rsa.PrivateKey
+	signers      map[string]jose.Signer
+	issuer       string
+	scope        string
+	realms       realms.Realms
+	roleMappings RoleMappings
 }
 
-func (t tokenCreator) AccessTokenTTL() int64 {
-	return t.accessTokenTTL
+func (t tokenCreator) SignClaims(realm string, claims map[string]any) (string, error) {
+	var algorithm = strings.ToUpper(t.realms[realm].SigningAlgorithm)
+	if !slices.Contains(OIDCSupportedAlgorithms, algorithm) {
+		return "", ErrUnsupportedAlgorithm
+	}
+	return jwt.Signed(t.signers[algorithm]).Claims(claims).CompactSerialize()
 }
 
 func (t tokenCreator) Issuer() string {
 	return t.issuer
 }
 
-func (t tokenCreator) GenerateAccessToken(user User, subject, clientID, scope string) (string, error) {
+func (t tokenCreator) GenerateAccessToken(user User, realm, subject, clientID, scope string) (string, error) {
 	var now = time.Now()
 
 	var claims = map[string]any{
@@ -86,21 +92,48 @@ func (t tokenCreator) GenerateAccessToken(user User, subject, clientID, scope st
 		ClaimSubject:       subject,
 		ClaimIssuedAtTime:  now.Unix(),
 		ClaimNotBeforeTime: now.Unix(),
-		ClaimExpiryTime:    now.Unix() + t.accessTokenTTL,
-		ClaimAudience:      []string{t.issuer, clientID},
+		ClaimExpiryTime:    now.Unix() + int64(t.realms[realm].AccessTokenTTL),
 		ClaimTokenID:       NewTokenID(now),
+	}
+
+	var audExpandFn = func(name string) string {
+		switch strings.ToLower(name) {
+		case "issuer":
+			return t.issuer
+		case "client_id":
+			return clientID
+		case "realm":
+			return realm
+		}
+		return ""
+	}
+
+	if len(t.realms[realm].Audiences) > 0 {
+		if len(t.realms[realm].Audiences) == 1 {
+			if aud := strings.TrimSpace(os.Expand(t.realms[realm].Audiences[0], audExpandFn)); aud != "" {
+				claims[ClaimAudience] = aud
+			}
+		} else {
+			var audiences []string
+			for _, audTmpl := range t.realms[realm].Audiences {
+				if aud := strings.TrimSpace(os.Expand(audTmpl, audExpandFn)); aud != "" {
+					audiences = append(audiences, aud)
+				}
+			}
+			claims[ClaimAudience] = audiences
+		}
 	}
 
 	if scope != "" {
 		claims[ClaimScope] = scope
 	}
 
-	AddExtraClaims(claims, t.accessTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, t.realms[realm].AccessTokenExtraClaims, user, clientID, t.roleMappings)
 
-	return jwt.Signed(t.signer).Claims(claims).CompactSerialize()
+	return t.SignClaims(realm, claims)
 }
 
-func (t tokenCreator) GenerateIDToken(user User, clientID, scope, accessTokenHash, nonce string) (string, error) {
+func (t tokenCreator) GenerateIDToken(user User, realm, clientID, scope, accessTokenHash, nonce string) (string, error) {
 	var now = time.Now()
 
 	var claims = map[string]any{
@@ -108,8 +141,8 @@ func (t tokenCreator) GenerateIDToken(user User, clientID, scope, accessTokenHas
 		ClaimSubject:         user.UserID,
 		ClaimIssuedAtTime:    now.Unix(),
 		ClaimNotBeforeTime:   now.Unix(),
-		ClaimExpiryTime:      now.Unix() + t.idTokenTTL,
-		ClaimAudience:        []string{t.issuer, clientID},
+		ClaimExpiryTime:      now.Unix() + int64(t.realms[realm].IDTokenTTL),
+		ClaimAudience:        clientID,
 		ClaimAccessTokenHash: accessTokenHash,
 		ClaimNonce:           nonce,
 		ClaimTokenID:         NewTokenID(now),
@@ -127,12 +160,12 @@ func (t tokenCreator) GenerateIDToken(user User, clientID, scope, accessTokenHas
 	if strings.Contains(scope, "address") {
 		AddAddressClaims(claims, user)
 	}
-	AddExtraClaims(claims, t.idTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, t.realms[realm].IDTokenExtraClaims, user, clientID, t.roleMappings)
 
-	return jwt.Signed(t.signer).Claims(claims).CompactSerialize()
+	return t.SignClaims(realm, claims)
 }
 
-func (t tokenCreator) GenerateAuthCode(userID, clientID, scope, challenge, nonce string) (string, error) {
+func (t tokenCreator) GenerateAuthCode(realm, userID, clientID, scope, challenge, nonce string) (string, error) {
 	var now = time.Now()
 
 	var claims = map[string]any{
@@ -156,10 +189,10 @@ func (t tokenCreator) GenerateAuthCode(userID, clientID, scope, challenge, nonce
 		claims[ClaimNonce] = nonce
 	}
 
-	return jwt.Signed(t.signer).Claims(claims).CompactSerialize()
+	return t.SignClaims(realm, claims)
 }
 
-func (t tokenCreator) GenerateRefreshToken(userID, clientID, scope, nonce string) (string, error) {
+func (t tokenCreator) GenerateRefreshToken(realm, userID, clientID, scope, nonce string) (string, error) {
 	var now = time.Now()
 	var tokenID = NewTokenID(now)
 
@@ -171,7 +204,7 @@ func (t tokenCreator) GenerateRefreshToken(userID, clientID, scope, nonce string
 		ClaimUserID:        userID,
 		ClaimIssuedAtTime:  now.Unix(),
 		ClaimNotBeforeTime: now.Unix(),
-		ClaimExpiryTime:    now.Unix() + t.refreshTokenTTL,
+		ClaimExpiryTime:    now.Unix() + int64(t.realms[realm].RefreshTokenTTL),
 		ClaimTokenID:       tokenID,
 	}
 
@@ -182,7 +215,7 @@ func (t tokenCreator) GenerateRefreshToken(userID, clientID, scope, nonce string
 		claims[ClaimNonce] = nonce
 	}
 
-	return jwt.Signed(t.signer).Claims(claims).CompactSerialize()
+	return t.SignClaims(realm, claims)
 }
 
 func (t tokenCreator) Verify(rawToken, tokenType string) (*VerifiedClaims, error) {
@@ -209,28 +242,23 @@ func (t tokenCreator) Verify(rawToken, tokenType string) (*VerifiedClaims, error
 	}
 }
 
-func NewTokenCreator(privateKey *rsa.PrivateKey, keyID, issuer, scope string,
-	accessTokenTTL, refreshTokenTTL, idTokenTTL int64,
-	accessTokenExtraClaims, idTokenExtraClaims map[string]string,
-	roleMappings RoleMappings, usePSS bool) (TokenCreator, error) {
-	var algorithm = jose.RS256
-	if usePSS {
-		algorithm = jose.PS256
-	}
-	var signer, err = jose.NewSigner(jose.SigningKey{Algorithm: algorithm, Key: privateKey}, (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", keyID))
-	if err != nil {
-		return nil, err
+func NewTokenCreator(privateKey *rsa.PrivateKey, keyID, issuer, scope string, realms realms.Realms, roleMappings RoleMappings) (TokenCreator, error) {
+
+	var signers = make(map[string]jose.Signer)
+
+	for _, algorithm := range OIDCSupportedAlgorithms {
+		if signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.SignatureAlgorithm(strings.ToUpper(algorithm)), Key: privateKey}, (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", keyID)); err != nil {
+			return nil, err
+		} else {
+			signers[algorithm] = signer
+		}
 	}
 	return &tokenCreator{
-		privateKey:             privateKey,
-		signer:                 signer,
-		issuer:                 issuer,
-		scope:                  scope,
-		accessTokenTTL:         accessTokenTTL,
-		refreshTokenTTL:        refreshTokenTTL,
-		idTokenTTL:             idTokenTTL,
-		accessTokenExtraClaims: accessTokenExtraClaims,
-		idTokenExtraClaims:     idTokenExtraClaims,
-		roleMappings:           roleMappings,
+		privateKey:   privateKey,
+		signers:      signers,
+		issuer:       issuer,
+		scope:        scope,
+		realms:       realms,
+		roleMappings: roleMappings,
 	}, nil
 }

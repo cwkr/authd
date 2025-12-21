@@ -8,7 +8,6 @@ import (
 
 	"github.com/blockloop/scan/v2"
 	"github.com/cwkr/authd/internal/sqlutil"
-	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -46,15 +45,13 @@ func (p PersonDetails) Person() *Person {
 	}
 }
 
-func NewSqlStore(sessionStore sessions.Store, users map[string]AuthenticPerson, sessionTTL int64, dbs map[string]*sql.DB, settings *StoreSettings) (Store, error) {
+func NewSqlStore(users map[string]AuthenticPerson, dbs map[string]*sql.DB, settings *StoreSettings) (Store, error) {
 	if dbconn, err := sqlutil.GetDB(dbs, settings.URI); err != nil {
 		return nil, err
 	} else {
 		return &sqlStore{
 			inMemoryStore: inMemoryStore{
-				sessionStore: sessionStore,
-				users:        users,
-				sessionTTL:   sessionTTL,
+				users: users,
 			},
 			dbconn:   dbconn,
 			settings: settings,

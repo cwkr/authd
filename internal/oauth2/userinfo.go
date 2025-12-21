@@ -2,19 +2,20 @@ package oauth2
 
 import (
 	"encoding/json"
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/people"
 	"log"
 	"net/http"
+
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/people"
 )
 
-type userInfoHandler struct {
+type userinfoHandler struct {
 	peopleStore  people.Store
 	extraClaims  map[string]string
 	roleMappings RoleMappings
 }
 
-func (u *userInfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (u *userinfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 
 	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, true)
@@ -54,8 +55,8 @@ func (u *userInfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func UserInfoHandler(peopleStore people.Store, extraClaims map[string]string, roleMappings RoleMappings) http.Handler {
-	return &userInfoHandler{
+func UserinfoHandler(peopleStore people.Store, extraClaims map[string]string, roleMappings RoleMappings) http.Handler {
+	return &userinfoHandler{
 		peopleStore:  peopleStore,
 		extraClaims:  extraClaims,
 		roleMappings: roleMappings,

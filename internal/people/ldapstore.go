@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/gorilla/sessions"
 )
 
 type ldapStore struct {
@@ -34,7 +33,7 @@ type ldapStore struct {
 	readOnly          bool
 }
 
-func NewLdapStore(sessionStore sessions.Store, users map[string]AuthenticPerson, sessionTTL int64, settings *StoreSettings) (Store, error) {
+func NewLdapStore(users map[string]AuthenticPerson, settings *StoreSettings) (Store, error) {
 	var ldapURL, baseDN, bindUsername, bindPassword string
 	var readOnly bool
 	if uri, err := url.Parse(settings.URI); err == nil {
@@ -68,9 +67,7 @@ func NewLdapStore(sessionStore sessions.Store, users map[string]AuthenticPerson,
 
 	return &ldapStore{
 		inMemoryStore: inMemoryStore{
-			sessionStore: sessionStore,
-			users:        users,
-			sessionTTL:   sessionTTL,
+			users: users,
 		},
 		ldapURL:           ldapURL,
 		baseDN:            baseDN,

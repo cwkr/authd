@@ -2,17 +2,20 @@ package server
 
 import (
 	_ "embed"
-	"github.com/cwkr/authd/internal/htmlutil"
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/stringutil"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cwkr/authd/internal/htmlutil"
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/oauth2/realms"
+	"github.com/cwkr/authd/internal/people"
+	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/stringutil"
 )
 
 //go:embed templates/login.gohtml
@@ -28,19 +31,20 @@ func LoadLoginTemplate(filename string) error {
 }
 
 type loginHandler struct {
-	basePath    string
-	peopleStore people.Store
-	clientStore clients.Store
-	issuer      string
-	sessionName string
-	tpl         *template.Template
+	basePath       string
+	sessionManager sessions.SessionManager
+	peopleStore    people.Store
+	clientStore    clients.Store
+	issuer         string
+	realms         realms.Realms
+	tpl            *template.Template
 }
 
 func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 	var message string
 
-	var userID, password, clientID, sessionName string
+	var userID, password, clientID string
 
 	clientID = strings.ToLower(r.FormValue("client_id"))
 	if clientID == "" {
@@ -49,7 +53,6 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		sessionName = j.sessionName
 		userID = strings.TrimSpace(r.PostFormValue("user_id"))
 		if userID == "" {
 			userID = strings.TrimSpace(r.PostFormValue("username"))
@@ -58,17 +61,16 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if stringutil.IsAnyEmpty(userID, password) {
 			message = "username and password must not be empty"
 		} else {
-			if client, err := j.clientStore.Lookup(clientID); err == nil {
-				if client.SessionName != "" {
-					sessionName = client.SessionName
-				}
+			var client clients.Client
+			if c, err := j.clientStore.Lookup(clientID); err == nil {
+				client = *c
 			} else {
 				htmlutil.Error(w, j.basePath, "invalid_client", http.StatusForbidden)
 				return
 			}
 
 			if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
-				if err := j.peopleStore.SaveSession(r, w, time.Now(), realUserID, sessionName); err != nil {
+				if err := j.sessionManager.SaveSession(r, w, time.Now(), client, realUserID); err != nil {
 					htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -98,13 +100,14 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func LoginHandler(basePath string, peopleStore people.Store, clientStore clients.Store, issuer, sessionName string) http.Handler {
+func LoginHandler(basePath string, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, realms realms.Realms, issuer string) http.Handler {
 	return &loginHandler{
-		basePath:    basePath,
-		peopleStore: peopleStore,
-		clientStore: clientStore,
-		issuer:      issuer,
-		sessionName: sessionName,
-		tpl:         template.Must(template.New("login").Parse(loginTpl)),
+		basePath:       basePath,
+		sessionManager: sessionManager,
+		peopleStore:    peopleStore,
+		clientStore:    clientStore,
+		realms:         realms,
+		issuer:         issuer,
+		tpl:            template.Must(template.New("login").Parse(loginTpl)),
 	}
 }

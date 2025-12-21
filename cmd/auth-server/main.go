@@ -21,6 +21,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server"
+	sessions2 "github.com/cwkr/authd/internal/server/sessions"
 	"github.com/cwkr/authd/internal/sqlutil"
 	"github.com/cwkr/authd/middleware"
 	"github.com/cwkr/authd/settings"
@@ -30,7 +31,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var version = "v0.7.x"
+var version = "v0.8.x"
 
 func main() {
 	var (
@@ -45,6 +46,7 @@ func main() {
 		settingsFilename     string
 		setClientID          string
 		setClientSecret      string
+		setClientRealm       string
 		setUserID            string
 		setPassword          string
 		setGivenName         string
@@ -63,6 +65,7 @@ func main() {
 	flag.StringVar(&configFilename, "config", "", "config file name")
 	flag.StringVar(&setClientID, "client-id", "", "set client id")
 	flag.StringVar(&setClientSecret, "client-secret", "", "set client secret")
+	flag.StringVar(&setClientRealm, "client-realm", "", "set client realm")
 	flag.StringVar(&setUserID, "user-id", "", "set user id")
 	flag.StringVar(&setPassword, "password", "", "set user password")
 	flag.StringVar(&setGivenName, "given-name", "", "set user given name")
@@ -143,6 +146,9 @@ func main() {
 				client.SecretHash = string(secretHash)
 			}
 		}
+		if setClientRealm != "" {
+			client.Realm = setClientRealm
+		}
 		serverSettings.Clients[setClientID] = client
 	}
 
@@ -205,13 +211,8 @@ func main() {
 		serverSettings.KeyID(),
 		serverSettings.Issuer,
 		scope,
-		int64(serverSettings.AccessTokenTTL),
-		int64(serverSettings.RefreshTokenTTL),
-		int64(serverSettings.IDTokenTTL),
-		serverSettings.AccessTokenExtraClaims,
-		serverSettings.IDTokenExtraClaims,
+		serverSettings.Realms,
 		serverSettings.Roles,
-		serverSettings.UsePSS,
 	)
 	if err != nil {
 		log.Fatalf("!!! %s", err)
@@ -220,7 +221,7 @@ func main() {
 	accessTokenValidator = middleware.NewAccessTokenValidator(serverSettings.KeySetProvider())
 
 	var basePath = ""
-	var sessionStore = sessions.NewCookieStore([]byte(serverSettings.SessionSecret))
+	var sessionStore = sessions.NewCookieStore([]byte(serverSettings.CookieSecret))
 	sessionStore.Options.HttpOnly = true
 	sessionStore.Options.MaxAge = 0
 	sessionStore.Options.SameSite = http.SameSiteLaxMode
@@ -236,6 +237,7 @@ func main() {
 	} else {
 		log.Fatalf("!!! %s", err)
 	}
+	var sessionManager = sessions2.NewSessionManager(sessionStore, serverSettings.Realms)
 
 	var dbs = make(map[string]*sql.DB)
 
@@ -243,18 +245,18 @@ func main() {
 
 	if serverSettings.PeopleStore != nil {
 		if sqlutil.IsDatabaseURI(serverSettings.PeopleStore.URI) {
-			if peopleStore, err = people.NewSqlStore(sessionStore, users, int64(serverSettings.SessionTTL), dbs, serverSettings.PeopleStore); err != nil {
+			if peopleStore, err = people.NewSqlStore(users, dbs, serverSettings.PeopleStore); err != nil {
 				log.Fatalf("!!! %s", err)
 			}
 		} else if strings.HasPrefix(serverSettings.PeopleStore.URI, "ldap:") || strings.HasPrefix(serverSettings.PeopleStore.URI, "ldaps:") {
-			if peopleStore, err = people.NewLdapStore(sessionStore, users, int64(serverSettings.SessionTTL), serverSettings.PeopleStore); err != nil {
+			if peopleStore, err = people.NewLdapStore(users, serverSettings.PeopleStore); err != nil {
 				log.Fatalf("!!! %s", err)
 			}
 		} else {
 			log.Fatalf("!!! unsupported or empty people_store.uri: %s", serverSettings.PeopleStore.URI)
 		}
 	} else {
-		peopleStore = people.NewInMemoryStore(sessionStore, users, int64(serverSettings.SessionTTL))
+		peopleStore = people.NewInMemoryStore(users)
 	}
 
 	if serverSettings.ClientStore != nil {
@@ -284,7 +286,7 @@ func main() {
 	var router = mux.NewRouter()
 
 	router.NotFoundHandler = htmlutil.NotFoundHandler(basePath)
-	router.Handle(basePath+"/", server.IndexHandler(basePath, serverSettings, peopleStore, clientStore, scope, version)).
+	router.Handle(basePath+"/", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version)).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/style.css", server.StyleHandler()).
 		Methods(http.MethodGet)
@@ -296,7 +298,7 @@ func main() {
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/favicon-32x32.png", server.Favicon32x32Handler()).
 		Methods(http.MethodGet)
-	router.Handle(basePath+"/login", server.LoginHandler(basePath, peopleStore, clientStore, serverSettings.Issuer, serverSettings.SessionName)).
+	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, serverSettings.Realms, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
 	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionStore, clientStore))
 	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
@@ -306,13 +308,13 @@ func main() {
 
 	router.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider())).
 		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, scope)).
+	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, serverSettings.Realms, scope)).
 		Methods(http.MethodOptions, http.MethodPost)
-	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, peopleStore, clientStore, scope, serverSettings.SessionName)).
+	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, sessionManager, peopleStore, clientStore, serverSettings.Realms, scope)).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation)).
 		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserInfoHandler(peopleStore, serverSettings.AccessTokenExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
+	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.UserinfoExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
 
 	if serverSettings.EnableTokenRevocation {

@@ -30,6 +30,7 @@
         <thead>
         <tr>
             <th>Client</th>
+            <th>Realm</th>
             <th colspan="2">Username</th>
         </tr>
         </thead>
@@ -37,6 +38,7 @@
         {{- range .active_sessions }}
         <tr>
             <td>{{ .ClientID }}</td>
+            <td>{{ .Realm }}</td>
             <td>{{ .UserID }}</td>
             <td>
                 <button type="submit" name="client_id" value="{{ .ClientID }}">Logout</button>

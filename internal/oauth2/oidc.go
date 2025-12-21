@@ -7,9 +7,19 @@ import (
 	"strings"
 
 	"github.com/cwkr/authd/internal/httputil"
+	"github.com/go-jose/go-jose/v3"
 )
 
 const OIDCDefaultScope = "openid profile email phone address offline_access"
+
+var OIDCSupportedAlgorithms = []string{
+	string(jose.PS256),
+	string(jose.PS384),
+	string(jose.PS512),
+	string(jose.RS256),
+	string(jose.RS384),
+	string(jose.RS512),
+}
 
 type DiscoveryDocument struct {
 	Issuer                                     string   `json:"issuer"`
@@ -63,9 +73,9 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		EndSessionEndpoint:                         baseURL + "/logout",
 		ScopesSupported:                            strings.Fields(d.scope),
 		TokenEndpointAuthMethodsSupported:          []string{"client_secret_basic", "client_secret_post"},
-		TokenEndpointAuthSigningAlgValuesSupported: []string{"PS256", "RS256"},
+		TokenEndpointAuthSigningAlgValuesSupported: OIDCSupportedAlgorithms,
 		CodeChallengeMethodsSupported:              []string{"S256"},
-		IDTokenSigningAlgValuesSupported:           []string{"PS256", "RS256"},
+		IDTokenSigningAlgValuesSupported:           OIDCSupportedAlgorithms,
 	}
 	if d.tokenRevocationSupported {
 		discoveryDocument.RevocationEndpoint = baseURL + "/revoke"

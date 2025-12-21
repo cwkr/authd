@@ -14,6 +14,7 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/pkce"
+	"github.com/cwkr/authd/internal/oauth2/realms"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
@@ -24,6 +25,7 @@ type tokenHandler struct {
 	peopleStore     people.Store
 	clientStore     clients.Store
 	revocationStore revocation.Store
+	realms          realms.Realms
 	scope           string
 }
 
@@ -107,7 +109,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: userID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, userID, clientID, IntersectScope(t.scope, scope))
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.Realm, userID, clientID, IntersectScope(t.scope, scope))
 		timing.Stop("jwtgen")
 	case GrantTypeAuthorizationCode:
 		var codeClaims, authCodeErr = t.tokenService.Verify(code, TokenTypeCode)
@@ -144,13 +146,13 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: codeClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, codeClaims.UserID, clientID, codeClaims.Scope)
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.Realm, codeClaims.UserID, clientID, codeClaims.Scope)
 		if strings.Contains(codeClaims.Scope, "offline_access") {
-			refreshToken, _ = t.tokenService.GenerateRefreshToken(codeClaims.UserID, clientID, codeClaims.Scope, codeClaims.Nonce)
+			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.Realm, codeClaims.UserID, clientID, codeClaims.Scope, codeClaims.Nonce)
 		}
 		if strings.Contains(codeClaims.Scope, "openid") {
 			var hash = sha256.Sum256([]byte(accessToken))
-			idToken, _ = t.tokenService.GenerateIDToken(user, clientID, codeClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), codeClaims.Nonce)
+			idToken, _ = t.tokenService.GenerateIDToken(user, client.Realm, clientID, codeClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), codeClaims.Nonce)
 		}
 		timing.Stop("jwtgen")
 	case GrantTypeRefreshToken:
@@ -179,16 +181,16 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: refreshClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, refreshClaims.UserID, clientID, refreshClaims.Scope)
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.Realm, refreshClaims.UserID, clientID, refreshClaims.Scope)
 		if client.EnableRefreshTokenRotation && strings.Contains(refreshClaims.Scope, "offline_access") {
 			_ = t.revocationStore.Put(refreshClaims.TokenID, refreshClaims.Expiry.Time())
-			refreshToken, _ = t.tokenService.GenerateRefreshToken(refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce)
+			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.Realm, refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce)
 		} else {
 			refreshToken = ""
 		}
 		if strings.Contains(refreshClaims.Scope, "openid") {
 			var hash = sha256.Sum256([]byte(accessToken))
-			idToken, _ = t.tokenService.GenerateIDToken(user, clientID, refreshClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), refreshClaims.Nonce)
+			idToken, _ = t.tokenService.GenerateIDToken(user, client.Realm, clientID, refreshClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), refreshClaims.Nonce)
 		}
 		timing.Stop("jwtgen")
 	case GrantTypeClientCredentials:
@@ -201,7 +203,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(User{}, clientID, clientID, IntersectScope(t.scope, scope))
+		accessToken, _ = t.tokenService.GenerateAccessToken(User{}, client.Realm, clientID, clientID, IntersectScope(t.scope, scope))
 		timing.Stop("jwtgen")
 	default:
 		Error(w, ErrorUnsupportedGrantType, "only grant types 'authorization_code', 'client_credentials', 'password' and 'refresh_token' are supported", http.StatusBadRequest)
@@ -211,7 +213,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var bytes, err = json.Marshal(TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    t.tokenService.AccessTokenTTL(),
+		ExpiresIn:    t.realms[client.Realm].AccessTokenTTL,
 		RefreshToken: refreshToken,
 		IDToken:      idToken,
 	})
@@ -226,12 +228,13 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(bytes)
 }
 
-func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, revocationStore revocation.Store, scope string) http.Handler {
+func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, revocationStore revocation.Store, realms realms.Realms, scope string) http.Handler {
 	return &tokenHandler{
 		tokenService:    tokenService,
 		peopleStore:     peopleStore,
 		clientStore:     clientStore,
 		revocationStore: revocationStore,
+		realms:          realms,
 		scope:           scope,
 	}
 }

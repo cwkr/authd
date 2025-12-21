@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	ClaimClientID        = "client_id"
+	ClaimClientID        = "cid"
 	ClaimExpiryTime      = "exp"
 	ClaimIssuer          = "iss"
 	ClaimIssuedAtTime    = "iat"

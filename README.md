@@ -43,11 +43,7 @@ and will load it's content when found.
   ],
   // available scopes
   "extra_scope": "profile email offline_access",
-  "access_token_ttl": 3600,
-  "refresh_token_ttl": 28800,
-  "session_secret": "AwBVrwW0boviWc3L12PplWTEgO4B4dxi",
-  "session_name": "_auth",
-  "session_ttl": 28800,
+  "cookie_secret": "AwBVrwW0boviWc3L12PplWTEgO4B4dxi",
   "keys_ttl": 900,
   // disable REST API completely 
   "disable_api": false,
@@ -67,7 +63,17 @@ and will load it's content when found.
     "app": {
       "redirect_uri_pattern": "https?:\\/\\/localhost(:\\d+)?\\/"
     }
-  }
+  },
+  "realms": {
+    "": {
+      "signing_algorithm": "RS256",
+      "access_token_ttl": 3600,
+      "refresh_token_ttl": 28800,
+      "id_token_ttl": 28800,
+      "session_name": "_auth",
+      "session_ttl": 28800
+    }
+  },
 }
 ```
 
@@ -150,20 +156,20 @@ Client column names are mapped by name:
 
 Client column names are mapped by name:
 
-| column name                       |
-|-----------------------------------|
-| `client_id`                       |
-| `redirect_uri_pattern`            |
-| `secret_hash`                     |
-| `session_name`                    |
-| `disable_implicit`                |
-| `enable_refresh_token_rotation`   |
+| column name                     |
+|---------------------------------|
+| `client_id`                     |
+| `redirect_uri_pattern`          |
+| `secret_hash`                   |
+| `realm`                         |
+| `disable_implicit`              |
+| `enable_refresh_token_rotation` |
 
 ```jsonc
 {
   "client_store": {
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
-    "query": "SELECT redirect_uri_pattern, secret_hash, session_name, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
+    "query": "SELECT redirect_uri_pattern, secret_hash, realm, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
     "query_session_names": "SELECT client_id, session_name FROM clients"
   }
 }
@@ -205,20 +211,20 @@ Client column names are mapped case-sensitive by name:
 
 Client column names are mapped case-sensitive by name:
 
-| column name                       |
-|-----------------------------------|
-| `client_id`                       |
-| `redirect_uri_pattern`            |
-| `secret_hash`                     |
-| `session_name`                    |
-| `disable_implicit`                |
-| `enable_refresh_token_rotation`   |
+| column name                     |
+|---------------------------------|
+| `client_id`                     |
+| `redirect_uri_pattern`          |
+| `secret_hash`                   |
+| `realm`                         |
+| `disable_implicit`              |
+| `enable_refresh_token_rotation` |
 
 ```jsonc
 {
   "client_store": {
     "uri": "oracle://authserver:trustno1@localhost:1521/orcl?charset=UTF8",
-    "query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", session_name \"session_name\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
+    "query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", realm \"realm\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
     "query_session_names": "SELECT client_id \"client_id\", session_name \"session_name\" FROM clients"
   }
 }
@@ -250,6 +256,35 @@ Client column names are mapped case-sensitive by name:
       "postal_code_attribute": "postalcode"
     }
   }
+}
+```
+
+#### Realms
+
+| audience placeholder variable |
+|-------------------------------|
+| `$client_id`                  |
+| `$issuer`                     |
+| `$realm`                      |
+
+```jsonc
+{
+  "clients": {
+    "foobar": {
+      "realm": "example"
+    }
+  },
+  "realms": {
+    "example": {
+      "signing_algorithm": "PS256",
+      "audiences": ["$client_id", "$realm", "https://example.org"],
+      "access_token_ttl": 900,
+      "refresh_token_ttl": 28800,
+      "id_token_ttl": 28800,
+      "session_name": "_auth_example",
+      "session_ttl": 28800
+    }
+  },
 }
 ```
 

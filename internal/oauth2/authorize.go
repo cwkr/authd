@@ -2,16 +2,19 @@ package oauth2
 
 import (
 	"fmt"
-	"github.com/cwkr/authd/internal/htmlutil"
-	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/stringutil"
 	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/cwkr/authd/internal/htmlutil"
+	"github.com/cwkr/authd/internal/httputil"
+	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/oauth2/realms"
+	"github.com/cwkr/authd/internal/people"
+	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/stringutil"
 )
 
 func IntersectScope(availableScope, requestedScope string) string {
@@ -28,12 +31,13 @@ func IntersectScope(availableScope, requestedScope string) string {
 }
 
 type authorizeHandler struct {
-	basePath     string
-	tokenService TokenCreator
-	peopleStore  people.Store
-	clientStore  clients.Store
-	scope        string
-	sessionName  string
+	basePath       string
+	tokenService   TokenCreator
+	sessionManager sessions.SessionManager
+	peopleStore    people.Store
+	clientStore    clients.Store
+	realms         realms.Realms
+	scope          string
 }
 
 func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +53,6 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		challenge       = strings.TrimSpace(r.FormValue("code_challenge"))
 		challengeMethod = strings.TrimSpace(r.FormValue("code_challenge_method"))
 		nonce           = strings.TrimSpace(r.FormValue("nonce"))
-		sessionName     = a.sessionName
 		user            User
 	)
 
@@ -69,16 +72,13 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		client = *c
 	}
-	if client.SessionName != "" {
-		sessionName = client.SessionName
-	}
 
 	if client.RedirectURIPattern != "" && !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
 		htmlutil.Error(w, a.basePath, ErrorRedirectURIMismatch, http.StatusBadRequest)
 		return
 	}
 
-	if uid, active := a.peopleStore.IsSessionActive(r, sessionName); active {
+	if uid, active := a.sessionManager.IsSessionActive(r, client); active {
 		timing.Start("store")
 		if person, err := a.peopleStore.Lookup(uid); err == nil {
 			user = User{UserID: uid, Person: *person}
@@ -98,7 +98,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch responseType {
 	case ResponseTypeToken:
 		timing.Start("jwtgen")
-		var accessToken, err = a.tokenService.GenerateAccessToken(user, user.UserID, clientID, IntersectScope(a.scope, scope))
+		var accessToken, err = a.tokenService.GenerateAccessToken(user, client.Realm, user.UserID, clientID, IntersectScope(a.scope, scope))
 		if err != nil {
 			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
 			return
@@ -106,7 +106,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("jwtgen")
 		redirectParams.Set("access_token", accessToken)
 		redirectParams.Set("token_type", "Bearer")
-		redirectParams.Set("expires_in", fmt.Sprint(a.tokenService.AccessTokenTTL()))
+		redirectParams.Set("expires_in", fmt.Sprint(a.realms[client.Realm].AccessTokenTTL))
 
 		httputil.NoCache(w)
 		timing.Report(w)
@@ -120,7 +120,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timing.Start("jwtgen")
-		var authCode, err = a.tokenService.GenerateAuthCode(user.UserID, clientID, IntersectScope(a.scope, scope), challenge, nonce)
+		var authCode, err = a.tokenService.GenerateAuthCode(client.Realm, user.UserID, clientID, IntersectScope(a.scope, scope), challenge, nonce)
 		if err != nil {
 			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
 			return
@@ -136,13 +136,14 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func AuthorizeHandler(basePath string, tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, scope, sessionName string) http.Handler {
+func AuthorizeHandler(basePath string, tokenService TokenCreator, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, realms realms.Realms, scope string) http.Handler {
 	return &authorizeHandler{
-		basePath:     basePath,
-		tokenService: tokenService,
-		peopleStore:  peopleStore,
-		clientStore:  clientStore,
-		scope:        scope,
-		sessionName:  sessionName,
+		basePath:       basePath,
+		tokenService:   tokenService,
+		sessionManager: sessionManager,
+		peopleStore:    peopleStore,
+		clientStore:    clientStore,
+		realms:         realms,
+		scope:          scope,
 	}
 }

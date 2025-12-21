@@ -2,11 +2,8 @@ package people
 
 import (
 	"log"
-	"net/http"
 	"strings"
-	"time"
 
-	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,16 +13,12 @@ type AuthenticPerson struct {
 }
 
 type inMemoryStore struct {
-	sessionStore sessions.Store
-	users        map[string]AuthenticPerson
-	sessionTTL   int64
+	users map[string]AuthenticPerson
 }
 
-func NewInMemoryStore(sessionStore sessions.Store, users map[string]AuthenticPerson, sessionTTL int64) Store {
+func NewInMemoryStore(users map[string]AuthenticPerson) Store {
 	return &inMemoryStore{
-		sessionStore: sessionStore,
-		users:        users,
-		sessionTTL:   sessionTTL,
+		users: users,
 	}
 }
 
@@ -42,28 +35,6 @@ func (e inMemoryStore) Authenticate(userID, password string) (string, error) {
 	}
 
 	return "", ErrAuthenticationFailed
-}
-
-func (e inMemoryStore) IsSessionActive(r *http.Request, sessionName string) (string, bool) {
-	var session, _ = e.sessionStore.Get(r, sessionName)
-
-	var uid, sct = session.Values["uid"], session.Values["sct"]
-
-	if uid != nil && sct != nil && time.Unix(sct.(int64), 0).Add(time.Duration(e.sessionTTL)*time.Second).After(time.Now()) {
-		return uid.(string), true
-	}
-
-	return "", false
-}
-
-func (e inMemoryStore) SaveSession(r *http.Request, w http.ResponseWriter, authTime time.Time, userID, sessionName string) error {
-	var session, _ = e.sessionStore.Get(r, sessionName)
-	session.Values["uid"] = userID
-	session.Values["sct"] = authTime.Unix()
-	if err := session.Save(r, w); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (e inMemoryStore) Lookup(userID string) (*Person, error) {
