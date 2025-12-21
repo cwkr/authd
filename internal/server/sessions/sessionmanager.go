@@ -37,19 +37,24 @@ func NewSessionManager(sessionStore sessions.Store, realms realms.Realms) Sessio
 }
 
 func (e sessionManager) CheckSession(r *http.Request, client clients.Client) (string, bool, bool) {
-	var (
-		session, _    = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
-		uid, sct, vfd = session.Values["uid"], session.Values["sct"], session.Values["vfd"]
-	)
+	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
 
-	if uid == nil || sct == nil || vfd == nil {
+	if session.Values["uid"] == nil {
 		return "", false, false
 	}
 
-	var createdAt, verifiedAt = time.Unix(sct.(int64), 0), time.Unix(vfd.(int64), 0)
+	var createdAt, verifiedAt time.Time
+
+	if sct, valid := session.Values["sct"].(int64); valid {
+		createdAt = time.Unix(sct, 0)
+	}
+
+	if vfd, valid := session.Values["vfd"].(int64); valid {
+		verifiedAt = time.Unix(vfd, 0)
+	}
 
 	if createdAt.Add(time.Duration(e.realms[client.Realm].SessionTTL) * time.Second).After(time.Now()) {
-		return uid.(string), true, !verifiedAt.Before(createdAt)
+		return session.Values["uid"].(string), true, !verifiedAt.Before(createdAt)
 	}
 
 	return "", false, false
@@ -81,14 +86,22 @@ func (e sessionManager) VerifySession(r *http.Request, w http.ResponseWriter, cl
 
 func (e sessionManager) GetSessionInfo(s *SessionInfo, r *http.Request, client clients.Client) {
 	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
-	if session.IsNew {
+	if session.IsNew || session.Values["uid"] == nil {
 		return
 	}
-	var createdAt = time.Unix(session.Values["sct"].(int64), 0)
+	var createdAt, verifiedAt time.Time
+
+	if sct, valid := session.Values["sct"].(int64); valid {
+		createdAt = time.Unix(sct, 0)
+	}
+
+	if vfd, valid := session.Values["vfd"].(int64); valid {
+		verifiedAt = time.Unix(vfd, 0)
+	}
 
 	s.UserID = session.Values["uid"].(string)
 	s.CreatedAt = createdAt
-	s.VerifiedAt = time.Unix(session.Values["vfd"].(int64), 0)
+	s.VerifiedAt = verifiedAt
 	s.ExpiresAt = createdAt.Add(time.Duration(e.realms[client.Realm].SessionTTL) * time.Second)
 }
 

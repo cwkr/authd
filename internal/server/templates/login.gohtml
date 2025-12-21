@@ -13,9 +13,14 @@
     <div style="color: salmon; text-align: center; margin-bottom: 2em;">{{ . }}</div>
 {{ end }}
 <form method="post" action="{{ .query }}" style="width: 240px; max-width: 100%; margin: 0 auto; display: flex; flex-direction: column;">
+    {{- if .code_required }}
+    <input type="password" name="code" placeholder="Code" autofocus>
+    <button type="submit" style="margin: 1em auto;">Verify</button>
+    {{- else }}
     <input type="text" name="user_id" placeholder="Username"{{ with .user_id }} value="{{ . }}" {{ end }}autofocus>
     <input type="password" name="password" placeholder="Password">
     <button type="submit" style="margin: 1em auto;">Login</button>
+    {{- end }}
 </form>
 </body>
 </html>

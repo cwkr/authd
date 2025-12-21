@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Two-factor authentication</title>
+    <link rel="stylesheet" href="{{ .base_path }}/style.css">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-16x16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-32x32.png" sizes="32x32">
+</head>
+<body>
+<h1>Two-factor authentication</h1>
+
+<p>
+    Two-factor authentication using time-based one-time password is{{ if not .user_totp_enabled }} <strong>not</strong>{{ end }} available.
+</p>
+
+{{ if .user_totp_enabled }}
+<div>
+    <img src="{{ .qrcode }}" alt="qrcode">
+</div>
+{{ end }}
+
+<div style="text-align: right"><small>{{ .version }}</small></div>
+</body>
+</html>

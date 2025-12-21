@@ -19,6 +19,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
+	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server"
 	sessions2 "github.com/cwkr/authd/internal/server/sessions"
@@ -53,6 +54,8 @@ func main() {
 		setFamilyName        string
 		setEmail             string
 		setDepartment        string
+		generateTOTPKey      bool
+		totpHashAlgorithm    string
 		keySize              int
 		keyID                string
 		saveSettings         bool
@@ -72,6 +75,8 @@ func main() {
 	flag.StringVar(&setFamilyName, "family-name", "", "set user family name")
 	flag.StringVar(&setEmail, "email", "", "set user email")
 	flag.StringVar(&setDepartment, "department", "", "set user department")
+	flag.BoolVar(&generateTOTPKey, "totp", false, "generate Time-based One-time Password (TOTP) key")
+	flag.StringVar(&totpHashAlgorithm, "totp-hash-algorithm", "sha256", "totp hash algorithm")
 	flag.IntVar(&keySize, "key-size", 2048, "generated signing key size")
 	flag.StringVar(&keyID, "key-id", "sigkey", "set generated signing key id")
 	flag.BoolVar(&saveSettings, "save", false, "save config and exit")
@@ -179,6 +184,13 @@ func main() {
 		if user.PasswordHash == "" {
 			log.Fatal("!!! missing password")
 		}
+		if generateTOTPKey {
+			if totpURI, err := otpauth.GenerateURI(serverSettings.Issuer, setUserID, totpHashAlgorithm); err != nil {
+				log.Fatalf("!!! %s", err)
+			} else {
+				user.OTPKeyURI = totpURI
+			}
+		}
 		serverSettings.Users[setUserID] = user
 	}
 
@@ -283,6 +295,8 @@ func main() {
 		}
 	}
 
+	var otpauthStore = otpauth.NewInMemoryStore(users)
+
 	var router = mux.NewRouter()
 
 	router.NotFoundHandler = htmlutil.NotFoundHandler(basePath)
@@ -298,7 +312,7 @@ func main() {
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/favicon-32x32.png", server.Favicon32x32Handler()).
 		Methods(http.MethodGet)
-	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, serverSettings.Realms, serverSettings.Issuer)).
+	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, serverSettings.Realms, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
 	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
 	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
@@ -316,6 +330,9 @@ func main() {
 		Methods(http.MethodGet, http.MethodOptions)
 	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.UserinfoExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
+
+	router.Handle(basePath+"/otp", server.OTPHandler(sessionManager, clientStore, otpauthStore, basePath, version)).
+		Methods(http.MethodGet)
 
 	if serverSettings.EnableTokenRevocation {
 		router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore)).

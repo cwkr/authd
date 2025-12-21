@@ -10,6 +10,7 @@ import (
 type AuthenticPerson struct {
 	Person
 	PasswordHash string `json:"password_hash"`
+	OTPKeyURI    string `json:"otp_key_uri,omitempty"`
 }
 
 type inMemoryStore struct {

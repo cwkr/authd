@@ -11,12 +11,14 @@ require (
 	github.com/hjson/hjson-go/v4 v4.5.0
 	github.com/lib/pq v1.10.9
 	github.com/oklog/ulid/v2 v2.1.1
+	github.com/pquerna/otp v1.5.0
 	github.com/sijms/go-ora/v2 v2.8.24
 	golang.org/x/crypto v0.46.0
 )
 
 require (
 	github.com/Azure/go-ntlmssp v0.1.0 // indirect
+	github.com/boombuler/barcode v1.1.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
