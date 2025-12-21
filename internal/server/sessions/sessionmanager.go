@@ -9,9 +9,19 @@ import (
 	"github.com/gorilla/sessions"
 )
 
+type SessionInfo struct {
+	UserID     string
+	CreatedAt  time.Time
+	VerifiedAt time.Time
+	ExpiresAt  time.Time
+}
+
 type SessionManager interface {
-	IsSessionActive(r *http.Request, client clients.Client) (string, bool)
-	SaveSession(r *http.Request, w http.ResponseWriter, authTime time.Time, client clients.Client, userID string) error
+	CheckSession(r *http.Request, client clients.Client) (string, bool, bool)
+	CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error
+	VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error
+	GetSessionInfo(s *SessionInfo, r *http.Request, client clients.Client)
+	EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error
 }
 
 type sessionManager struct {
@@ -26,24 +36,69 @@ func NewSessionManager(sessionStore sessions.Store, realms realms.Realms) Sessio
 	}
 }
 
-func (e sessionManager) IsSessionActive(r *http.Request, client clients.Client) (string, bool) {
-	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
+func (e sessionManager) CheckSession(r *http.Request, client clients.Client) (string, bool, bool) {
+	var (
+		session, _    = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
+		uid, sct, vfd = session.Values["uid"], session.Values["sct"], session.Values["vfd"]
+	)
 
-	var uid, sct = session.Values["uid"], session.Values["sct"]
-
-	if uid != nil && sct != nil && time.Unix(sct.(int64), 0).Add(time.Duration(e.realms[client.Realm].SessionTTL)*time.Second).After(time.Now()) {
-		return uid.(string), true
+	if uid == nil || sct == nil || vfd == nil {
+		return "", false, false
 	}
 
-	return "", false
+	var createdAt, verifiedAt = time.Unix(sct.(int64), 0), time.Unix(vfd.(int64), 0)
+
+	if createdAt.Add(time.Duration(e.realms[client.Realm].SessionTTL) * time.Second).After(time.Now()) {
+		return uid.(string), true, !verifiedAt.Before(createdAt)
+	}
+
+	return "", false, false
 }
 
-func (e sessionManager) SaveSession(r *http.Request, w http.ResponseWriter, authTime time.Time, client clients.Client, userID string) error {
+func (e sessionManager) CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error {
 	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
 	session.Values["uid"] = userID
-	session.Values["sct"] = authTime.Unix()
+	session.Values["sct"] = time.Now().Unix()
+	if verified {
+		session.Values["vfd"] = session.Values["sct"]
+	} else {
+		session.Values["vfd"] = 0
+	}
 	if err := session.Save(r, w); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (e sessionManager) VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
+	session.Values["vfd"] = time.Now().Unix()
+	if err := session.Save(r, w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e sessionManager) GetSessionInfo(s *SessionInfo, r *http.Request, client clients.Client) {
+	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
+	if session.IsNew {
+		return
+	}
+	var createdAt = time.Unix(session.Values["sct"].(int64), 0)
+
+	s.UserID = session.Values["uid"].(string)
+	s.CreatedAt = createdAt
+	s.VerifiedAt = time.Unix(session.Values["vfd"].(int64), 0)
+	s.ExpiresAt = createdAt.Add(time.Duration(e.realms[client.Realm].SessionTTL) * time.Second)
+}
+
+func (e sessionManager) EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+	var session, _ = e.sessionStore.Get(r, e.realms[client.Realm].SessionName)
+	if !session.IsNew {
+		session.Options.MaxAge = -1
+		if err := session.Save(r, w); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -78,7 +78,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if uid, active := a.sessionManager.IsSessionActive(r, client); active {
+	if uid, active, verified := a.sessionManager.CheckSession(r, client); active && verified {
 		timing.Start("store")
 		if person, err := a.peopleStore.Lookup(uid); err == nil {
 			user = User{UserID: uid, Person: *person}

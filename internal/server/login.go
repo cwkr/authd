@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
@@ -70,7 +69,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
-				if err := j.sessionManager.SaveSession(r, w, time.Now(), client, realUserID); err != nil {
+				if err := j.sessionManager.CreateSession(r, w, client, realUserID, true); err != nil {
 					htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 					return
 				}

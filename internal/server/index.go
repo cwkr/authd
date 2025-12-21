@@ -34,9 +34,9 @@ type indexHandler struct {
 }
 
 type activeSession struct {
-	ClientID string
-	Realm    string
-	UserID   string
+	ClientID    string
+	UserID      string
+	SessionInfo sessions.SessionInfo
 }
 
 func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -49,8 +49,10 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		clientIDs = cids
 		for _, cid := range cids {
 			var client, _ = i.clientStore.Lookup(cid)
-			if uid, active := i.sessionManager.IsSessionActive(r, *client); active == true {
-				activeSessions = append(activeSessions, activeSession{ClientID: cid, Realm: client.Realm, UserID: uid})
+			if uid, active, _ := i.sessionManager.CheckSession(r, *client); active {
+				var a = activeSession{ClientID: cid, UserID: uid}
+				i.sessionManager.GetSessionInfo(&a.SessionInfo, r, *client)
+				activeSessions = append(activeSessions, a)
 			}
 		}
 	} else {

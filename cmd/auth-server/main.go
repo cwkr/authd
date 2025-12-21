@@ -300,7 +300,7 @@ func main() {
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, serverSettings.Realms, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
-	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionStore, clientStore))
+	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
 	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/info", server.InfoHandler(version, runtime.Version())).

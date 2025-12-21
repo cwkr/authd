@@ -12,9 +12,9 @@ import (
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
+	"github.com/cwkr/authd/internal/server/sessions"
 	"github.com/cwkr/authd/settings"
 	"github.com/go-jose/go-jose/v3/jwt"
-	"github.com/gorilla/sessions"
 )
 
 //go:embed templates/logout.gohtml
@@ -32,7 +32,7 @@ func LoadLogoutTemplate(filename string) error {
 type logoutHandler struct {
 	basePath       string
 	serverSettings *settings.Server
-	sessionStore   sessions.Store
+	sessionManager sessions.SessionManager
 	clientStore    clients.Store
 	tpl            *template.Template
 }
@@ -79,16 +79,11 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var session, _ = l.sessionStore.Get(r, l.serverSettings.Realms[client.Realm].SessionName)
-
 	httputil.NoCache(w)
 
-	if !session.IsNew {
-		session.Options.MaxAge = -1
-		if err := session.Save(r, w); err != nil {
-			htmlutil.Error(w, l.basePath, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	if err := l.sessionManager.EndSession(r, w, client); err != nil {
+		htmlutil.Error(w, l.basePath, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if redirectURI != "" {
@@ -102,11 +97,11 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func LogoutHandler(basePath string, serverSettings *settings.Server, sessionStore sessions.Store, clientStore clients.Store) http.Handler {
+func LogoutHandler(basePath string, serverSettings *settings.Server, sessionManager sessions.SessionManager, clientStore clients.Store) http.Handler {
 	return &logoutHandler{
 		basePath:       basePath,
 		serverSettings: serverSettings,
-		sessionStore:   sessionStore,
+		sessionManager: sessionManager,
 		clientStore:    clientStore,
 		tpl:            template.Must(template.New("logout").Parse(logoutTpl)),
 	}
