@@ -42,6 +42,7 @@ func main() {
 		peopleStore          people.Store
 		revocationStore      revocation.Store
 		clientStore          clients.Store
+		otpauthStore         otpauth.Store
 		err                  error
 		configFilename       string
 		settingsFilename     string
@@ -185,10 +186,10 @@ func main() {
 			log.Fatal("!!! missing password")
 		}
 		if generateTOTPKey {
-			if totpURI, err := otpauth.GenerateURI(serverSettings.Issuer, setUserID, totpHashAlgorithm); err != nil {
+			if kw, err := otpauth.NewKeyWrapper(serverSettings.Issuer, setUserID, totpHashAlgorithm, ""); err != nil {
 				log.Fatalf("!!! %s", err)
 			} else {
-				user.OTPKeyURI = totpURI
+				user.OTPKeyURI = kw.URI()
 			}
 		}
 		serverSettings.Users[setUserID] = user
@@ -295,7 +296,17 @@ func main() {
 		}
 	}
 
-	var otpauthStore = otpauth.NewInMemoryStore(users)
+	if serverSettings.OtpauthStore != nil {
+		if sqlutil.IsDatabaseURI(serverSettings.OtpauthStore.URI) {
+			if otpauthStore, err = otpauth.NewSqlStore(users, dbs, serverSettings.OtpauthStore); err != nil {
+				log.Fatalf("!!! %s", err)
+			}
+		} else {
+			log.Fatalf("!!! unsupported or empty otpauth_store.uri: %s", serverSettings.ClientStore.URI)
+		}
+	} else {
+		otpauthStore = otpauth.NewInMemoryStore(users)
+	}
 
 	var router = mux.NewRouter()
 
@@ -331,8 +342,8 @@ func main() {
 	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.UserinfoExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
 
-	router.Handle(basePath+"/otp", server.OTPHandler(sessionManager, clientStore, otpauthStore, basePath, version)).
-		Methods(http.MethodGet)
+	router.Handle(basePath+"/setup-2fa", server.TwoFactorAuthSetupHandler(sessionManager, clientStore, otpauthStore, basePath, version, serverSettings.Issuer)).
+		Methods(http.MethodGet, http.MethodPost)
 
 	if serverSettings.EnableTokenRevocation {
 		router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore)).

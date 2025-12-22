@@ -1,6 +1,7 @@
 package otpauth
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/cwkr/authd/internal/people"
@@ -27,6 +28,10 @@ func (e inMemoryStore) Lookup(userID string) (*KeyWrapper, error) {
 	} else {
 		return &KeyWrapper{key: k}, nil
 	}
+}
+
+func (e inMemoryStore) Put(userID string, keyWrapper KeyWrapper) error {
+	return errors.ErrUnsupported
 }
 
 func (e inMemoryStore) Ping() error {

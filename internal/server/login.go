@@ -65,27 +65,29 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var require2FA = j.realms[client.Realm].Require2FA
+
 	userID, sessionActive, sessionVerified = j.sessionManager.CheckSession(r, client)
 
+	if !sessionActive {
+		userID = strings.TrimSpace(r.FormValue("user_id"))
+		if userID == "" {
+			userID = strings.TrimSpace(r.FormValue("username"))
+		}
+	}
+
+	if k, err := j.otpauthStore.Lookup(userID); err == nil {
+		kw = k
+	}
+
 	if r.Method == http.MethodPost {
-		if !sessionActive {
-			userID = strings.TrimSpace(r.PostFormValue("user_id"))
-			if userID == "" {
-				userID = strings.TrimSpace(r.PostFormValue("username"))
-			}
-		}
-
-		if k, err := j.otpauthStore.Lookup(userID); err == nil {
-			kw = k
-		}
-
 		if !sessionActive {
 			password = r.PostFormValue("password")
 			if stringutil.IsAnyEmpty(userID, password) {
 				message = "username and password must not be empty"
 			} else {
 				if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
-					var codeRequired = kw != nil
+					var codeRequired = require2FA || kw != nil
 					if err := j.sessionManager.CreateSession(r, w, client, realUserID, !codeRequired); err != nil {
 						htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 						return
@@ -94,6 +96,10 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if codeRequired {
 						sessionActive = true
 						sessionVerified = false
+						if kw == nil {
+							httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/setup-2fa", r.URL.Query())
+							return
+						}
 					} else {
 						httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/authorize", r.URL.Query())
 						return
@@ -126,8 +132,13 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if r.Method == http.MethodGet {
-		if sessionActive && sessionVerified {
-			message = "current active session for " + userID
+		if sessionActive {
+			if sessionVerified {
+				message = "current active session for " + userID
+			} else if kw == nil && require2FA {
+				httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/setup-2fa", r.URL.Query())
+				return
+			}
 		}
 		httputil.NoCache(w)
 	}

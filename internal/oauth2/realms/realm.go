@@ -10,6 +10,7 @@ type Realm struct {
 	IDTokenExtraClaims     map[string]string `json:"id_token_extra_claims,omitempty"`
 	SessionName            string            `json:"session_name,omitempty"`
 	SessionTTL             int               `json:"session_ttl"`
+	Require2FA             bool              `json:"require_2fa"`
 }
 
 type Realms map[string]Realm
