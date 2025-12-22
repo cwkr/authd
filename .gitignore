@@ -5,7 +5,7 @@
 *.so
 *.dylib
 
-auth-server
+cmd/auth-server/auth-server
 cmd/genrsakey/genrsakey
 cmd/jwks2pem/jwks2pem
 cmd/pem2jwks/pem2jwks

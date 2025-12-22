@@ -11,6 +11,7 @@ CREATE TABLE people (
     street_address VARCHAR,
     locality VARCHAR,
     postal_code VARCHAR,
+    otpauth_uri VARCHAR,
     created TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     last_modified TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

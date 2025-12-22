@@ -73,7 +73,7 @@ type tokenCreator struct {
 }
 
 func (t tokenCreator) SignClaims(realm string, claims map[string]any) (string, error) {
-	var algorithm = strings.ToUpper(t.realms[realm].SigningAlgorithm)
+	var algorithm = strings.ToUpper(t.realms[strings.ToLower(realm)].SigningAlgorithm)
 	if !slices.Contains(OIDCSupportedAlgorithms, algorithm) {
 		return "", ErrUnsupportedAlgorithm
 	}
@@ -84,15 +84,18 @@ func (t tokenCreator) Issuer() string {
 	return t.issuer
 }
 
-func (t tokenCreator) GenerateAccessToken(user User, realm, subject, clientID, scope string) (string, error) {
-	var now = time.Now()
+func (t tokenCreator) GenerateAccessToken(user User, realmName, subject, clientID, scope string) (string, error) {
+	var (
+		now   = time.Now()
+		realm = t.realms[strings.ToLower(realmName)]
+	)
 
 	var claims = map[string]any{
 		ClaimIssuer:        t.issuer,
 		ClaimSubject:       subject,
 		ClaimIssuedAtTime:  now.Unix(),
 		ClaimNotBeforeTime: now.Unix(),
-		ClaimExpiryTime:    now.Unix() + int64(t.realms[realm].AccessTokenTTL),
+		ClaimExpiryTime:    now.Unix() + int64(realm.AccessTokenTTL),
 		ClaimTokenID:       NewTokenID(now),
 	}
 
@@ -103,19 +106,19 @@ func (t tokenCreator) GenerateAccessToken(user User, realm, subject, clientID, s
 		case "client_id":
 			return clientID
 		case "realm":
-			return realm
+			return realmName
 		}
 		return ""
 	}
 
-	if len(t.realms[realm].Audiences) > 0 {
-		if len(t.realms[realm].Audiences) == 1 {
-			if aud := strings.TrimSpace(os.Expand(t.realms[realm].Audiences[0], audExpandFn)); aud != "" {
+	if len(realm.Audiences) > 0 {
+		if len(realm.Audiences) == 1 {
+			if aud := strings.TrimSpace(os.Expand(realm.Audiences[0], audExpandFn)); aud != "" {
 				claims[ClaimAudience] = aud
 			}
 		} else {
 			var audiences []string
-			for _, audTmpl := range t.realms[realm].Audiences {
+			for _, audTmpl := range realm.Audiences {
 				if aud := strings.TrimSpace(os.Expand(audTmpl, audExpandFn)); aud != "" {
 					audiences = append(audiences, aud)
 				}
@@ -128,20 +131,23 @@ func (t tokenCreator) GenerateAccessToken(user User, realm, subject, clientID, s
 		claims[ClaimScope] = scope
 	}
 
-	AddExtraClaims(claims, t.realms[realm].AccessTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, realm.AccessTokenExtraClaims, user, clientID, t.roleMappings)
 
-	return t.SignClaims(realm, claims)
+	return t.SignClaims(realmName, claims)
 }
 
-func (t tokenCreator) GenerateIDToken(user User, realm, clientID, scope, accessTokenHash, nonce string) (string, error) {
-	var now = time.Now()
+func (t tokenCreator) GenerateIDToken(user User, realmName, clientID, scope, accessTokenHash, nonce string) (string, error) {
+	var (
+		now   = time.Now()
+		realm = t.realms[strings.ToLower(realmName)]
+	)
 
 	var claims = map[string]any{
 		ClaimIssuer:          t.issuer,
 		ClaimSubject:         user.UserID,
 		ClaimIssuedAtTime:    now.Unix(),
 		ClaimNotBeforeTime:   now.Unix(),
-		ClaimExpiryTime:      now.Unix() + int64(t.realms[realm].IDTokenTTL),
+		ClaimExpiryTime:      now.Unix() + int64(realm.IDTokenTTL),
 		ClaimAudience:        clientID,
 		ClaimAccessTokenHash: accessTokenHash,
 		ClaimNonce:           nonce,
@@ -160,12 +166,12 @@ func (t tokenCreator) GenerateIDToken(user User, realm, clientID, scope, accessT
 	if strings.Contains(scope, "address") {
 		AddAddressClaims(claims, user)
 	}
-	AddExtraClaims(claims, t.realms[realm].IDTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, realm.IDTokenExtraClaims, user, clientID, t.roleMappings)
 
-	return t.SignClaims(realm, claims)
+	return t.SignClaims(realmName, claims)
 }
 
-func (t tokenCreator) GenerateAuthCode(realm, userID, clientID, scope, challenge, nonce string) (string, error) {
+func (t tokenCreator) GenerateAuthCode(realmName, userID, clientID, scope, challenge, nonce string) (string, error) {
 	var now = time.Now()
 
 	var claims = map[string]any{
@@ -189,10 +195,10 @@ func (t tokenCreator) GenerateAuthCode(realm, userID, clientID, scope, challenge
 		claims[ClaimNonce] = nonce
 	}
 
-	return t.SignClaims(realm, claims)
+	return t.SignClaims(realmName, claims)
 }
 
-func (t tokenCreator) GenerateRefreshToken(realm, userID, clientID, scope, nonce string) (string, error) {
+func (t tokenCreator) GenerateRefreshToken(realmName, userID, clientID, scope, nonce string) (string, error) {
 	var now = time.Now()
 	var tokenID = NewTokenID(now)
 
@@ -204,7 +210,7 @@ func (t tokenCreator) GenerateRefreshToken(realm, userID, clientID, scope, nonce
 		ClaimUserID:        userID,
 		ClaimIssuedAtTime:  now.Unix(),
 		ClaimNotBeforeTime: now.Unix(),
-		ClaimExpiryTime:    now.Unix() + int64(t.realms[realm].RefreshTokenTTL),
+		ClaimExpiryTime:    now.Unix() + int64(t.realms[strings.ToLower(realmName)].RefreshTokenTTL),
 		ClaimTokenID:       tokenID,
 	}
 
@@ -215,7 +221,7 @@ func (t tokenCreator) GenerateRefreshToken(realm, userID, clientID, scope, nonce
 		claims[ClaimNonce] = nonce
 	}
 
-	return t.SignClaims(realm, claims)
+	return t.SignClaims(realmName, claims)
 }
 
 func (t tokenCreator) Verify(rawToken, tokenType string) (*VerifiedClaims, error) {

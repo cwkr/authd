@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Two-factor authentication</title>
+    <link rel="stylesheet" href="{{ .base_path }}/style.css">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-16x16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-32x32.png" sizes="32x32">
+</head>
+<body>
+<h1>Two-factor authentication</h1>
+
+{{ with .error_message }}
+    <div style="color: salmon; margin-bottom: 2em;">{{ . }}</div>
+{{ end }}
+
+<p>
+    Two-factor authentication using time-based one-time password{{ if .require_2fa }} is required{{ if not .user_2fa_enabled }} but{{ else }} and{{ end }}{{ end }}{{ if not .user_2fa_enabled }} <strong>not</strong>{{ end }} enabled.
+</p>
+
+{{ if and (not .user_2fa_enabled) (not .readonly_otpauth_store) }}
+<form method="post" action="{{ .query }}">
+    <div style="display: flex;">
+        <button type="submit" name="alg" value="sha1"{{ if eq .algorithm "sha1" }} disabled{{ end }}>SHA1</button>
+        <button type="submit" name="alg" value="sha256"{{ if eq .algorithm "sha256" }} disabled{{ end }}>SHA256</button>
+        <button type="submit" name="alg" value="sha512"{{ if eq .algorithm "sha512" }} disabled{{ end }}>SHA512</button>
+    </div>
+</form>
+{{ end }}
+{{ if or (and (not .readonly_otpauth_store) (not .user_2fa_enabled)) (and .readonly_otpauth_store .user_2fa_enabled) }}
+<div style="margin-top: 1em; margin-bottom: 2em;">
+    <img src="{{ .qrcode }}" alt="qrcode">
+</div>
+{{ end }}
+{{ if and (not .user_2fa_enabled) (not .readonly_otpauth_store) }}
+<form method="post" action="{{ .query }}">
+    <input type="hidden" name="alg" value="{{ .algorithm }}">
+    <input type="hidden" name="secret" value="{{ .secret }}">
+    <input type="password" name="code" placeholder="Code" autofocus required>
+    <button type="submit" style="margin: 1em auto;">Enable</button>
+</form>
+{{ end }}
+{{ if and .user_2fa_enabled (not .readonly_otpauth_store) }}
+    <form method="post" action="{{ .query }}">
+        <input type="password" name="recovery_code" placeholder="Recovery code" autofocus required>
+        <button type="submit" style="margin: 1em auto;">Disable</button>
+    </form>
+{{ end }}
+
+<div style="text-align: right"><small>{{ .version }}</small></div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 package oauth2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -88,7 +89,10 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		timing.Stop("store")
 	} else {
-		httputil.RedirectQuery(w, r, strings.TrimRight(a.tokenService.Issuer(), "/")+"/login", r.URL.Query())
+		var query = make(url.Values)
+		query.Set("client_id", clientID)
+		query.Set("authorize_query", base64.RawURLEncoding.EncodeToString([]byte(r.URL.RawQuery)))
+		httputil.RedirectQuery(w, r, strings.TrimRight(a.tokenService.Issuer(), "/")+"/login", query)
 		return
 	}
 
@@ -106,7 +110,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("jwtgen")
 		redirectParams.Set("access_token", accessToken)
 		redirectParams.Set("token_type", "Bearer")
-		redirectParams.Set("expires_in", fmt.Sprint(a.realms[client.Realm].AccessTokenTTL))
+		redirectParams.Set("expires_in", fmt.Sprint(a.realms[strings.ToLower(client.Realm)].AccessTokenTTL))
 
 		httputil.NoCache(w)
 		timing.Report(w)

@@ -15,6 +15,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/realms"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
+	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/keyset"
@@ -40,6 +41,7 @@ type Server struct {
 	CookieSecret            string                            `json:"cookie_secret"`
 	UserinfoExtraClaims     map[string]string                 `json:"userinfo_extra_claims,omitempty"`
 	PeopleStore             *people.StoreSettings             `json:"people_store,omitempty"`
+	OtpauthStore            *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
 	DisableAPI              bool                              `json:"disable_api,omitempty"`
 	PeopleAPICustomVersions map[string]CustomPeopleAPI        `json:"people_api_custom_versions,omitempty"`
 	PeopleAPIRequireAuthN   bool                              `json:"people_api_require_authn,omitempty"`

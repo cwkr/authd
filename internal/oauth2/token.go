@@ -213,7 +213,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var bytes, err = json.Marshal(TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    t.realms[client.Realm].AccessTokenTTL,
+		ExpiresIn:    t.realms[strings.ToLower(client.Realm)].AccessTokenTTL,
 		RefreshToken: refreshToken,
 		IDToken:      idToken,
 	})

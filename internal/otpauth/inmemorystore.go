@@ -1,6 +1,7 @@
 package otpauth
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/cwkr/authd/internal/people"
@@ -19,14 +20,22 @@ func NewInMemoryStore(users map[string]people.AuthenticPerson) Store {
 
 func (e inMemoryStore) Lookup(userID string) (*KeyWrapper, error) {
 	var authenticPerson, found = e.users[strings.ToLower(userID)]
-	if !found || !strings.HasPrefix(authenticPerson.OTPKeyURI, PrefixOTPAuth) {
+	if !found || !strings.HasPrefix(authenticPerson.OTPAuthURI, PrefixOTPAuth) {
 		return nil, ErrNotFound
 	}
-	if k, err := otp.NewKeyFromURL(authenticPerson.OTPKeyURI); err != nil {
+	if k, err := otp.NewKeyFromURL(authenticPerson.OTPAuthURI); err != nil {
 		return nil, err
 	} else {
 		return &KeyWrapper{key: k}, nil
 	}
+}
+
+func (e inMemoryStore) Put(userID string, keyWrapper KeyWrapper) error {
+	return errors.ErrUnsupported
+}
+
+func (e inMemoryStore) Delete(userID string) error {
+	return errors.ErrUnsupported
 }
 
 func (e inMemoryStore) Ping() error {

@@ -1,0 +1,91 @@
+package otpauth
+
+import (
+	"database/sql"
+	"errors"
+	"log"
+	"strings"
+
+	"github.com/cwkr/authd/internal/people"
+	"github.com/cwkr/authd/internal/sqlutil"
+	"github.com/pquerna/otp"
+)
+
+type sqlStore struct {
+	inMemoryStore
+	dbconn   *sql.DB
+	settings *StoreSettings
+}
+
+func NewSqlStore(users map[string]people.AuthenticPerson, dbs map[string]*sql.DB, settings *StoreSettings) (Store, error) {
+	if dbconn, err := sqlutil.GetDB(dbs, settings.URI); err != nil {
+		return nil, err
+	} else {
+		return &sqlStore{
+			inMemoryStore: inMemoryStore{users: users},
+			dbconn:        dbconn,
+			settings:      settings,
+		}, nil
+	}
+}
+
+func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
+	if c, err := e.inMemoryStore.Lookup(userID); err == nil {
+		return c, nil
+	}
+
+	if strings.TrimSpace(e.settings.Query) == "" {
+		log.Print("!!! SQL query empty")
+		return nil, nil
+	}
+
+	var otpauthURI sql.NullString
+	log.Printf("SQL: %s; -- %s", e.settings.Query, userID)
+	// SELECT otpauth_uri FROM people WHERE lower(user_id) = lower($1)
+	if row := e.dbconn.QueryRow(e.settings.Query, userID); row.Err() == nil {
+		if err := row.Scan(&otpauthURI); err != nil {
+			log.Printf("!!! Scan otpauth credentials failed: %v", err)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
+	} else {
+		log.Printf("!!! Query for otpauth credentials failed: %v", row.Err())
+		return nil, row.Err()
+	}
+	if !otpauthURI.Valid {
+		return nil, ErrNotFound
+	}
+	if k, err := otp.NewKeyFromURL(otpauthURI.String); err != nil {
+		return nil, err
+	} else {
+		return &KeyWrapper{key: k}, nil
+	}
+}
+
+func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) error {
+	// UPDATE people SET otpauth_uri = $2, last_modified = now() WHERE lower(user_id) = lower($1)
+	log.Printf("SQL: %s; -- %s", e.settings.Update, userID)
+	if _, err := e.dbconn.Exec(e.settings.Update, userID, keyWrapper.URI()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e sqlStore) Delete(userID string) error {
+	// UPDATE people SET otpauth_uri = null, last_modified = now() WHERE lower(user_id) = lower($1)
+	log.Printf("SQL: %s; -- %s", e.settings.Delete, userID)
+	if _, err := e.dbconn.Exec(e.settings.Delete, userID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e sqlStore) Ping() error {
+	return e.dbconn.Ping()
+}
+
+func (e sqlStore) ReadOnly() bool {
+	return false
+}

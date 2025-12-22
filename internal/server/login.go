@@ -2,10 +2,12 @@ package server
 
 import (
 	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -65,38 +67,49 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var (
+		require2FA       = j.realms[strings.ToLower(client.Realm)].Require2FA
+		loginQueryBase64 = base64.RawURLEncoding.EncodeToString([]byte(r.URL.RawQuery))
+	)
+
 	userID, sessionActive, sessionVerified = j.sessionManager.CheckSession(r, client)
 
+	if !sessionActive {
+		userID = strings.TrimSpace(r.FormValue("user_id"))
+		if userID == "" {
+			userID = strings.TrimSpace(r.FormValue("username"))
+		}
+	}
+
+	if k, err := j.otpauthStore.Lookup(userID); err == nil {
+		kw = k
+	}
+
 	if r.Method == http.MethodPost {
-		if !sessionActive {
-			userID = strings.TrimSpace(r.PostFormValue("user_id"))
-			if userID == "" {
-				userID = strings.TrimSpace(r.PostFormValue("username"))
-			}
-		}
-
-		if k, err := j.otpauthStore.Lookup(userID); err == nil {
-			kw = k
-		}
-
 		if !sessionActive {
 			password = r.PostFormValue("password")
 			if stringutil.IsAnyEmpty(userID, password) {
 				message = "username and password must not be empty"
 			} else {
 				if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
-					var codeRequired = kw != nil
+					var codeRequired = require2FA || kw != nil
 					if err := j.sessionManager.CreateSession(r, w, client, realUserID, !codeRequired); err != nil {
 						htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 						return
 					}
 					log.Printf("user_id=%s", realUserID)
+					sessionActive = true
 					if codeRequired {
-						sessionActive = true
 						sessionVerified = false
+						if kw == nil {
+							var params = make(url.Values)
+							params.Set("client_id", clientID)
+							params.Set("login_query", loginQueryBase64)
+							httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/setup-2fa", params)
+							return
+						}
 					} else {
-						httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/authorize", r.URL.Query())
-						return
+						sessionVerified = true
 					}
 				} else {
 					message = err.Error()
@@ -115,8 +128,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							if err := j.sessionManager.VerifySession(r, w, client); err != nil {
 								message = err.Error()
 							} else {
-								httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/authorize", r.URL.Query())
-								return
+								sessionVerified = true
 							}
 						} else {
 							message = fmt.Sprintf("code %s is invalid", code)
@@ -126,22 +138,40 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if r.Method == http.MethodGet {
-		if sessionActive && sessionVerified {
-			message = "current active session for " + userID
-		}
 		httputil.NoCache(w)
+		if sessionActive && !sessionVerified && kw == nil && require2FA {
+			var params = make(url.Values)
+			params.Set("client_id", clientID)
+			params.Set("login_query", loginQueryBase64)
+			httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/setup-2fa", params)
+			return
+		}
+	}
+
+	if sessionActive && sessionVerified {
+		message = "current active session for " + userID
+		var authorizeQueryBase64 = strings.TrimSpace(r.URL.Query().Get("authorize_query"))
+		if authorizeQueryBase64 != "" {
+			if authorizeQuery, err := base64.RawURLEncoding.DecodeString(authorizeQueryBase64); err == nil {
+				var query, _ = url.ParseQuery(string(authorizeQuery))
+				httputil.RedirectQuery(w, r, strings.TrimRight(j.issuer, "/")+"/authorize", query)
+				return
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	var err = j.tpl.ExecuteTemplate(w, "login", map[string]any{
-		"base_path":      j.basePath,
-		"issuer":         strings.TrimRight(j.issuer, "/"),
-		"query":          template.HTML("?" + r.URL.RawQuery),
-		"message":        message,
-		"user_id":        userID,
-		"password_empty": password == "",
-		"code_required":  sessionActive && !sessionVerified,
+		"base_path":          j.basePath,
+		"issuer":             strings.TrimRight(j.issuer, "/"),
+		"query":              template.HTML("?" + r.URL.RawQuery),
+		"message":            message,
+		"client_id":          clientID,
+		"login_query_base64": loginQueryBase64,
+		"user_id":            userID,
+		"password_empty":     password == "",
+		"code_required":      sessionActive && !sessionVerified,
 	})
 	if err != nil {
 		htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
