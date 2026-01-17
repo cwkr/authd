@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
@@ -81,13 +82,20 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if k, err := j.otpauthStore.Lookup(userID); err == nil {
-		kw = k
+	if userID != "" {
+		if k, err := j.otpauthStore.Lookup(userID); err == nil {
+			kw = k
+		}
 	}
 
 	if r.Method == http.MethodPost {
+		password = r.PostFormValue("password")
+		code = strings.TrimSpace(r.PostFormValue("code"))
+
+		// debug output of parameters
+		log.Printf("user_id=%q password=%q code=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), strings.Repeat("*", utf8.RuneCountInString(code)))
+
 		if !sessionActive {
-			password = r.PostFormValue("password")
 			if stringutil.IsAnyEmpty(userID, password) {
 				message = "username and password must not be empty"
 			} else {
@@ -97,7 +105,6 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 						return
 					}
-					log.Printf("user_id=%s", realUserID)
 					sessionActive = true
 					if codeRequired {
 						sessionVerified = false
@@ -117,7 +124,6 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if !sessionVerified {
-				code = strings.TrimSpace(r.PostFormValue("code"))
 				if stringutil.IsAnyEmpty(code) {
 					message = "code must not be empty"
 				} else {

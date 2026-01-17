@@ -37,7 +37,7 @@
 <form method="post" action="{{ .query }}">
     <input type="hidden" name="alg" value="{{ .algorithm }}">
     <input type="hidden" name="secret" value="{{ .secret }}">
-    <input type="password" name="code" placeholder="Code" autofocus required>
+    <input type="text" name="code" placeholder="Code" pattern="[0-9]+" autofocus required>
     <button type="submit" style="margin: 1em auto;">Enable</button>
 </form>
 {{ end }}
