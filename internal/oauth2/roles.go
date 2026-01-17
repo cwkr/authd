@@ -1,16 +1,18 @@
 package oauth2
 
 import (
-	"github.com/go-ldap/ldap/v3"
 	"log"
 	"slices"
 	"strings"
+
+	"github.com/go-ldap/ldap/v3"
 )
 
 type RoleMapping struct {
-	ByGroup   []string `json:"by_group,omitempty"`
-	ByGroupDN []string `json:"by_group_dn,omitempty"`
-	ByUserID  []string `json:"by_user_id,omitempty"`
+	ByGroup    []string `json:"by_group,omitempty"`
+	ByGroupDN  []string `json:"by_group_dn,omitempty"`
+	ByUserID   []string `json:"by_user_id,omitempty"`
+	ByClientID []string `json:"by_client_id,omitempty"`
 }
 
 type RoleMappings map[string]RoleMapping
@@ -82,5 +84,29 @@ func (c RoleMappings) Roles(user User) []string {
 		}
 	}
 	log.Printf("user: %s, mapped roles: %s", user.UserID, strings.Join(roles, ", "))
+	return roles
+}
+
+func (c RoleMappings) ClientRoles(clientID string) []string {
+	var roles = make([]string, 0)
+
+	for role, mapping := range c {
+		if role == "*" {
+			continue
+		}
+
+		if len(mapping.ByClientID) > 0 {
+			for _, cid := range mapping.ByClientID {
+				if strings.EqualFold(strings.TrimSpace(cid), strings.TrimSpace(clientID)) || cid == "*" {
+					if !slices.Contains(roles, role) {
+						roles = append(roles, role)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	log.Printf("client: %s, mapped roles: %s", clientID, strings.Join(roles, ", "))
 	return roles
 }

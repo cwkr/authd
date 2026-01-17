@@ -8,6 +8,7 @@ CREATE TABLE people (
     birthdate DATE,
     department VARCHAR,
     phone_number VARCHAR,
+    room_number VARCHAR,
     street_address VARCHAR,
     locality VARCHAR,
     postal_code VARCHAR,

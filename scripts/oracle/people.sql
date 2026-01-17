@@ -7,9 +7,11 @@ CREATE TABLE people (
     birthdate DATE,
     department VARCHAR2(255 CHAR),
     phone_number VARCHAR2(255 CHAR),
+    room_number VARCHAR2(255 CHAR),
     street_address VARCHAR2(255 CHAR),
     locality VARCHAR2(255 CHAR),
     postal_code VARCHAR2(255 CHAR),
+    otpauth_uri VARCHAR2(255 CHAR),
     created TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP(3) NOT NULL,
     last_modified TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP(3) NOT NULL
 );

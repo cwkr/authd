@@ -21,14 +21,22 @@ const (
 	ClaimTokenID         = "jti"
 )
 
-func AddExtraClaims(claims map[string]any, extraClaims map[string]string, user User, clientID string, roleMappings RoleMappings) {
+func AddExtraClaims(claims map[string]any, extraClaims map[string]string, user User, subject, clientID string, roleMappings RoleMappings) {
+	var roles []string
+
+	if user.UserID == "" {
+		roles = roleMappings.ClientRoles(clientID)
+	} else {
+		roles = roleMappings.Roles(user)
+	}
+
 	for key, tmpl := range extraClaims {
 		if strings.EqualFold(strings.TrimSpace(tmpl), "$groups") {
 			if len(user.Groups) > 0 {
 				claims[key] = user.Groups
 			}
 		} else if strings.EqualFold(strings.TrimSpace(tmpl), "$roles") {
-			if roles := roleMappings.Roles(user); len(roles) > 0 {
+			if len(roles) > 0 {
 				claims[key] = roles
 			}
 		} else if value := strings.TrimSpace(os.Expand(tmpl, func(name string) string {
@@ -58,15 +66,17 @@ func AddExtraClaims(claims map[string]any, extraClaims map[string]string, user U
 			case "groups_semicolon_delimited":
 				return strings.Join(user.Groups, ";")
 			case "roles_space_delimited":
-				return strings.Join(roleMappings.Roles(user), " ")
+				return strings.Join(roles, " ")
 			case "roles_comma_delimited":
-				return strings.Join(roleMappings.Roles(user), ",")
+				return strings.Join(roles, ",")
 			case "roles_semicolon_delimited":
-				return strings.Join(roleMappings.Roles(user), ";")
+				return strings.Join(roles, ";")
 			case "room_number":
 				return user.RoomNumber
 			case "street_address":
 				return user.StreetAddress
+			case "subject":
+				return subject
 			case "user_id":
 				return user.UserID
 			}

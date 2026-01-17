@@ -89,6 +89,10 @@ func (k KeyWrapper) Secret() string {
 	return k.key.Secret()
 }
 
+func (k KeyWrapper) Algorithm() string {
+	return k.key.Algorithm().String()
+}
+
 type Store interface {
 	Lookup(userID string) (*KeyWrapper, error)
 	Put(userID string, keyWrapper KeyWrapper) error

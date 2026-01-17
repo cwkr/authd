@@ -16,12 +16,12 @@ func RedirectQuery(w http.ResponseWriter, r *http.Request, url string, params ur
 	http.Redirect(w, r, fmt.Sprintf("%s?%s", url, params.Encode()), http.StatusFound)
 }
 
-func ExtractAccessToken(r *http.Request) string {
+func BearerAuth(r *http.Request) (string, bool) {
 	var fields = strings.Fields(r.Header.Get("Authorization"))
-	if len(fields) == 2 && strings.EqualFold("Bearer", fields[0]) {
-		return fields[1]
+	if len(fields) >= 2 && strings.EqualFold("Bearer", fields[0]) {
+		return fields[1], true
 	}
-	return ""
+	return "", false
 }
 
 func AllowCORS(w http.ResponseWriter, r *http.Request, allowMethods []string, allowCredentials bool) {

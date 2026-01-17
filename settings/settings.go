@@ -51,6 +51,7 @@ type Server struct {
 	EnableTokenRevocation   bool                              `json:"enable_token_revocation,omitempty"`
 	KeysTTL                 int                               `json:"keys_ttl,omitempty"`
 	Roles                   oauth2.RoleMappings               `json:"roles,omitempty"`
+	AdministratorRole       string                            `json:"administrator_role,omitempty"`
 	rsaSigningKey           *rsa.PrivateKey
 	rsaSigningKeyID         string
 	keySetProvider          keyset.Provider

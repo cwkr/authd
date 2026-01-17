@@ -357,14 +357,14 @@ func main() {
 		var lookupPersonHandler = server.LookupPersonHandler(peopleStore,
 			serverSettings.PeopleAPICustomVersions, serverSettings.Roles)
 		if serverSettings.PeopleAPIRequireAuthN {
-			lookupPersonHandler = middleware.RequireJWT(lookupPersonHandler, accessTokenValidator, serverSettings.Issuer)
+			lookupPersonHandler = middleware.RequireAuthN(lookupPersonHandler, accessTokenValidator, peopleStore, serverSettings.Issuer)
 		}
 		router.Handle(basePath+"/api/{version}/people/{user_id}", lookupPersonHandler).
 			Methods(http.MethodGet, http.MethodOptions)
 		if !peopleStore.ReadOnly() {
-			router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireJWT(server.PutPersonHandler(peopleStore), accessTokenValidator, serverSettings.Issuer)).
+			router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.PutPersonHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 				Methods(http.MethodPut)
-			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireJWT(server.ChangePasswordHandler(peopleStore), accessTokenValidator, serverSettings.Issuer)).
+			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 				Methods(http.MethodOptions, http.MethodPut)
 		}
 	}

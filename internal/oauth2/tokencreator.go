@@ -131,7 +131,7 @@ func (t tokenCreator) GenerateAccessToken(user User, realmName, subject, clientI
 		claims[ClaimScope] = scope
 	}
 
-	AddExtraClaims(claims, realm.AccessTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, realm.AccessTokenExtraClaims, user, subject, clientID, t.roleMappings)
 
 	return t.SignClaims(realmName, claims)
 }
@@ -166,7 +166,7 @@ func (t tokenCreator) GenerateIDToken(user User, realmName, clientID, scope, acc
 	if strings.Contains(scope, "address") {
 		AddAddressClaims(claims, user)
 	}
-	AddExtraClaims(claims, realm.IDTokenExtraClaims, user, clientID, t.roleMappings)
+	AddExtraClaims(claims, realm.IDTokenExtraClaims, user, user.UserID, clientID, t.roleMappings)
 
 	return t.SignClaims(realmName, claims)
 }

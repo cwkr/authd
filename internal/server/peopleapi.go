@@ -12,7 +12,6 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/settings"
 	"github.com/gorilla/mux"
 )
@@ -51,6 +50,12 @@ func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var subject string
+
+	if contextUserID := r.Context().Value("user_id"); contextUserID != nil {
+		subject = contextUserID.(string)
+	}
+
 	var pathVars = mux.Vars(r)
 	var apiVersion = strings.TrimSpace(pathVars["version"])
 
@@ -66,7 +71,7 @@ func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if customVersion, found := p.customVersions[apiVersion]; found {
 			var claims = make(map[string]any)
-			oauth2.AddExtraClaims(claims, customVersion.Attributes, user, "", p.roleMappings)
+			oauth2.AddExtraClaims(claims, customVersion.Attributes, user, subject, "", p.roleMappings)
 			if filterParamName := strings.TrimSpace(customVersion.FilterParam); filterParamName != "" {
 				var attrsToFetch = cleanup(strings.Split(strings.Join(r.URL.Query()[filterParamName], ","), ","))
 				if len(attrsToFetch) > 0 {
@@ -77,7 +82,7 @@ func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			oauth2.AddExtraClaims(claims, customVersion.FixedAttributes, user, "", p.roleMappings)
+			oauth2.AddExtraClaims(claims, customVersion.FixedAttributes, user, subject, "", p.roleMappings)
 			bytes, err = json.Marshal(claims)
 		} else if apiVersion == "v1" {
 			bytes, err = json.Marshal(personWithRoles{Person: *person, Roles: p.roleMappings.Roles(user)})
@@ -150,8 +155,7 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 }
 
 type PasswordChange struct {
-	OldPassword string `json:"old_password"`
-	NewPassword string `json:"new_password"`
+	Password string `json:"password"`
 }
 
 func ChangePasswordHandler(peopleStore people.Store) http.Handler {
@@ -179,22 +183,7 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 
 		var userID = mux.Vars(r)["user_id"]
 
-		if !strings.EqualFold(userID, r.Context().Value("user_id").(string)) {
-			oauth2.Error(w, ErrorAccessDenied, "", http.StatusForbidden)
-			return
-		}
-
-		if stringutil.IsAnyEmpty(passwordChange.OldPassword, passwordChange.NewPassword) {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "old_password and new_password are required", http.StatusBadRequest)
-			return
-		}
-
-		if _, err := peopleStore.Authenticate(userID, passwordChange.OldPassword); err != nil {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "", http.StatusBadRequest)
-			return
-		}
-
-		if err := peopleStore.ChangePassword(userID, passwordChange.NewPassword); err != nil {
+		if err := peopleStore.ChangePassword(userID, passwordChange.Password); err != nil {
 			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return
