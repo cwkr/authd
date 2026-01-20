@@ -70,12 +70,17 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			enabled      bool
 			require2FA   = o.realms[strings.ToLower(client.Realm)].Require2FA
 		)
-		if algorithm == "" {
-			algorithm = "sha256"
-		}
 
 		keyWrapper, _ = o.otpauthStore.Lookup(uid)
 		enabled = keyWrapper != nil
+
+		if keyWrapper != nil {
+			algorithm = strings.ToLower(keyWrapper.Algorithm())
+		}
+
+		if algorithm == "" {
+			algorithm = "sha256"
+		}
 
 		if r.Method == http.MethodPost {
 			var (
