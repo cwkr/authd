@@ -47,6 +47,7 @@ type Server struct {
 	PeopleAPIRequireAuthN   bool                              `json:"people_api_require_authn,omitempty"`
 	LoginTemplate           string                            `json:"login_template,omitempty"`
 	LogoutTemplate          string                            `json:"logout_template,omitempty"`
+	Setup2FATemplate        string                            `json:"setup_2fa_template,omitempty"`
 	RevocationStore         *revocation.StoreSettings         `json:"revocation_store,omitempty"`
 	EnableTokenRevocation   bool                              `json:"enable_token_revocation,omitempty"`
 	KeysTTL                 int                               `json:"keys_ttl,omitempty"`

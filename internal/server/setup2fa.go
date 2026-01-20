@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 
 	"github.com/cwkr/authd/internal/htmlutil"
@@ -18,10 +20,19 @@ import (
 	"github.com/cwkr/authd/internal/stringutil"
 )
 
-//go:embed templates/2fa.gohtml
-var otpTpl string
+//go:embed templates/setup2fa.gohtml
+var setup2faTpl string
 
-type twoFactorAuthSetupHandler struct {
+func LoadSetup2FATemplate(filename string) error {
+	if bytes, err := os.ReadFile(filename); err == nil {
+		setup2faTpl = string(bytes)
+		return nil
+	} else {
+		return err
+	}
+}
+
+type setup2FAHandler struct {
 	sessionManager sessions.SessionManager
 	clientStore    clients.Store
 	realms         realms.Realms
@@ -32,7 +43,7 @@ type twoFactorAuthSetupHandler struct {
 	version        string
 }
 
-func (o *twoFactorAuthSetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 
 	var clientID = strings.TrimSpace(r.FormValue("client_id"))
@@ -68,8 +79,10 @@ func (o *twoFactorAuthSetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 
 		if r.Method == http.MethodPost {
 			var (
-				code         = strings.TrimSpace(r.PostFormValue("code"))
-				recoveryCode = strings.TrimSpace(r.PostFormValue("recovery_code"))
+				code             = strings.TrimSpace(r.PostFormValue("code"))
+				recoveryCode     = strings.TrimSpace(r.PostFormValue("recovery_code"))
+				loginQueryBase64 = strings.TrimSpace(r.URL.Query().Get("login_query"))
+				redirectURI      = strings.TrimSpace(r.URL.Query().Get("post_setup_redirect_uri"))
 			)
 			secret = strings.TrimSpace(r.PostFormValue("secret"))
 
@@ -87,8 +100,18 @@ func (o *twoFactorAuthSetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 									return
 								}
 							}
-							var loginQueryBase64 = strings.TrimSpace(r.URL.Query().Get("login_query"))
-							if loginQueryBase64 != "" {
+							if redirectURI != "" {
+								if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) {
+									if client.RedirectURIPattern != "" {
+										if !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
+											htmlutil.Error(w, o.basePath, "post_setup_redirect_uri does not match Clients redirect URI pattern", http.StatusBadRequest)
+											return
+										}
+									}
+								}
+								http.Redirect(w, r, redirectURI, http.StatusFound)
+								return
+							} else if loginQueryBase64 != "" {
 								if loginQuery, err := base64.RawURLEncoding.DecodeString(loginQueryBase64); err == nil {
 									var query, _ = url.ParseQuery(string(loginQuery))
 									httputil.RedirectQuery(w, r, strings.TrimRight(o.issuer, "/")+"/login", query)
@@ -114,8 +137,18 @@ func (o *twoFactorAuthSetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 							return
 						}
 					}
-					var loginQueryBase64 = strings.TrimSpace(r.URL.Query().Get("login_query"))
-					if loginQueryBase64 != "" {
+					if redirectURI != "" {
+						if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) {
+							if client.RedirectURIPattern != "" {
+								if !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
+									htmlutil.Error(w, o.basePath, "post_setup_redirect_uri does not match Clients redirect URI pattern", http.StatusBadRequest)
+									return
+								}
+							}
+						}
+						http.Redirect(w, r, redirectURI, http.StatusFound)
+						return
+					} else if loginQueryBase64 != "" {
 						if loginQuery, err := base64.RawURLEncoding.DecodeString(loginQueryBase64); err == nil {
 							var query, _ = url.ParseQuery(string(loginQuery))
 							httputil.RedirectQuery(w, r, strings.TrimRight(o.issuer, "/")+"/login", query)
@@ -170,13 +203,13 @@ func (o *twoFactorAuthSetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func TwoFactorAuthSetupHandler(sessionManager sessions.SessionManager, clientStore clients.Store, realms realms.Realms, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
-	return &twoFactorAuthSetupHandler{
+func Setup2FAHandler(sessionManager sessions.SessionManager, clientStore clients.Store, realms realms.Realms, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
+	return &setup2FAHandler{
 		sessionManager: sessionManager,
 		clientStore:    clientStore,
 		realms:         realms,
 		otpauthStore:   otpauthStore,
-		tpl:            template.Must(template.New("2fa").Parse(otpTpl)),
+		tpl:            template.Must(template.New("2fa").Parse(setup2faTpl)),
 		basePath:       basePath,
 		version:        version,
 		issuer:         issuer,

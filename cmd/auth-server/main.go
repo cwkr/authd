@@ -140,6 +140,15 @@ func main() {
 		}
 	}
 
+	if serverSettings.Setup2FATemplate != "" {
+		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.Setup2FATemplate, "@"))
+		log.Printf("Loading setup 2FA template from %s", filename)
+		err = server.LoadSetup2FATemplate(filename)
+		if err != nil {
+			log.Fatalf("!!! %s", err)
+		}
+	}
+
 	if setClientID != "" {
 		if serverSettings.Clients == nil {
 			serverSettings.Clients = map[string]clients.Client{}
@@ -345,7 +354,7 @@ func main() {
 	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.UserinfoExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
 
-	router.Handle(basePath+"/setup-2fa", server.TwoFactorAuthSetupHandler(sessionManager, clientStore, realms, otpauthStore, basePath, version, serverSettings.Issuer)).
+	router.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, realms, otpauthStore, basePath, version, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
 
 	if serverSettings.EnableTokenRevocation {
