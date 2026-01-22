@@ -95,7 +95,8 @@ func (k KeyWrapper) Algorithm() string {
 
 type Store interface {
 	Lookup(userID string) (*KeyWrapper, error)
-	Put(userID string, keyWrapper KeyWrapper) error
+	Put(userID string, keyWrapper KeyWrapper) (string, error)
+	VerifyRecoveryCode(userID, recoveryCode string) bool
 	Delete(userID string) error
 	Ping() error
 	ReadOnly() bool

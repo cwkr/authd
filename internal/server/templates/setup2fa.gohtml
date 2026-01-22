@@ -15,6 +15,17 @@
     <div style="color: salmon; margin-bottom: 2em;">{{ . }}</div>
 {{ end }}
 
+{{ if .generated_recovery_code }}
+    <p>
+        Two-factor authentication (2FA) using time-based one-time password (TOTP) hat been enabled. Please securely store the generated recovery code: <code style="font-weight: bold">{{ .generated_recovery_code }}</code>
+    </p>
+{{ if .post_setup_continuation_uri }}
+    <div>
+        <a href="{{ .post_setup_continuation_uri }}">Continue</a>
+    </div>
+{{ end }}
+{{ else }}
+
 <p>
     Two-factor authentication (2FA) using time-based one-time password (TOTP) {{ if .require_2fa }} is required{{ if not .user_2fa_enabled }} but{{ else }} and{{ end }}{{ end }}{{ if not .user_2fa_enabled }} <strong>not</strong>{{ end }} enabled.
 </p>
@@ -39,7 +50,7 @@
 </form>
 {{ end }}
 {{ if or (and (not .readonly_otpauth_store) (not .user_2fa_enabled)) (and .readonly_otpauth_store .user_2fa_enabled) }}
-<div style="margin-top: 1em; margin-bottom: 2em;">
+<div style="margin-top: 1em; margin-bottom: 1em;">
     <img src="{{ .qrcode }}" alt="qrcode">
 </div>
 {{ end }}
@@ -56,6 +67,8 @@
         <input type="password" name="recovery_code" placeholder="Recovery code" autofocus required>
         <button type="submit" style="margin: 1em auto;">Disable</button>
     </form>
+{{ end }}
+
 {{ end }}
 
 <div style="text-align: right"><small>{{ .version }}</small></div>

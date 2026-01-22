@@ -61,14 +61,16 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		client = *c
 	}
 
-	if uid, active, _ := o.sessionManager.CheckSession(r, client); active {
+	if uid, active, verified := o.sessionManager.CheckSession(r, client); active {
 		var (
-			algorithm    = strings.TrimSpace(r.FormValue("alg"))
-			secret       string
-			errorMessage string
-			keyWrapper   *otpauth.KeyWrapper
-			enabled      bool
-			require2FA   = o.realms[strings.ToLower(client.Realm)].Require2FA
+			algorithm                = strings.TrimSpace(r.FormValue("alg"))
+			secret                   string
+			errorMessage             string
+			keyWrapper               *otpauth.KeyWrapper
+			enabled                  bool
+			require2FA               = o.realms[strings.ToLower(client.Realm)].Require2FA
+			generatedRecoveryCode    string
+			postSetupContinuationURI string
 		)
 
 		keyWrapper, _ = o.otpauthStore.Lookup(uid)
@@ -96,47 +98,37 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					errorMessage = err.Error()
 				} else {
 					if kw.VerifyCode(code) {
-						if err := o.otpauthStore.Put(uid, *kw); err != nil {
+						if grc, err := o.otpauthStore.Put(uid, *kw); err != nil {
 							errorMessage = err.Error()
 						} else {
-							if _, _, verified := o.sessionManager.CheckSession(r, client); !verified {
+							if !verified {
 								if err := o.sessionManager.VerifySession(r, w, client); err != nil {
 									htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 									return
 								}
 							}
+							generatedRecoveryCode = grc
 							if redirectURI != "" {
-								if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) {
-									if client.RedirectURIPattern != "" {
-										if !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
-											htmlutil.Error(w, o.basePath, "post_setup_redirect_uri does not match Clients redirect URI pattern", http.StatusBadRequest)
-											return
-										}
-									}
+								if strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) || regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
+									postSetupContinuationURI = redirectURI
 								}
-								http.Redirect(w, r, redirectURI, http.StatusFound)
-								return
 							} else if loginQueryBase64 != "" {
 								if loginQuery, err := base64.RawURLEncoding.DecodeString(loginQueryBase64); err == nil {
-									var query, _ = url.ParseQuery(string(loginQuery))
-									httputil.RedirectQuery(w, r, strings.TrimRight(o.issuer, "/")+"/login", query)
-									return
+									postSetupContinuationURI = strings.TrimRight(o.issuer, "/") + "/login?" + string(loginQuery)
 								}
 							}
-							httputil.RedirectQuery(w, r, strings.TrimRight(o.issuer, "/")+"/setup-2fa", r.URL.Query())
-							return
 						}
 					} else {
 						errorMessage = "invalid code"
 					}
 				}
 			} else if enabled && recoveryCode != "" {
-				if strings.Contains(recoveryCode, "00") {
+				if o.otpauthStore.VerifyRecoveryCode(uid, recoveryCode) {
 					if err := o.otpauthStore.Delete(uid); err != nil {
 						htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 						return
 					}
-					if _, _, verified := o.sessionManager.CheckSession(r, client); !require2FA && !verified {
+					if !require2FA && !verified {
 						if err := o.sessionManager.VerifySession(r, w, client); err != nil {
 							htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 							return
@@ -188,16 +180,18 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := o.tpl.ExecuteTemplate(w, "2fa", map[string]any{
-			"base_path":              o.basePath,
-			"qrcode":                 template.URL(imageURL),
-			"require_2fa":            require2FA,
-			"user_2fa_enabled":       enabled,
-			"query":                  template.HTML("?" + r.URL.RawQuery),
-			"version":                o.version,
-			"algorithm":              algorithm,
-			"readonly_otpauth_store": o.otpauthStore.ReadOnly(),
-			"secret":                 keyWrapper.Secret(),
-			"error_message":          errorMessage,
+			"base_path":                   o.basePath,
+			"qrcode":                      template.URL(imageURL),
+			"require_2fa":                 require2FA,
+			"user_2fa_enabled":            enabled,
+			"query":                       template.HTML("?" + r.URL.RawQuery),
+			"version":                     o.version,
+			"algorithm":                   algorithm,
+			"readonly_otpauth_store":      o.otpauthStore.ReadOnly(),
+			"secret":                      keyWrapper.Secret(),
+			"error_message":               errorMessage,
+			"generated_recovery_code":     generatedRecoveryCode,
+			"post_setup_continuation_uri": postSetupContinuationURI,
 		}); err != nil {
 			htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 			return

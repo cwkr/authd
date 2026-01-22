@@ -13,6 +13,7 @@ CREATE TABLE people (
     locality VARCHAR,
     postal_code VARCHAR,
     otpauth_uri VARCHAR,
+    recovery_code_hash VARCHAR,
     created TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     last_modified TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

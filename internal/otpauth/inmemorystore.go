@@ -30,8 +30,12 @@ func (e inMemoryStore) Lookup(userID string) (*KeyWrapper, error) {
 	}
 }
 
-func (e inMemoryStore) Put(userID string, keyWrapper KeyWrapper) error {
-	return errors.ErrUnsupported
+func (e inMemoryStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
+	return "", errors.ErrUnsupported
+}
+
+func (e inMemoryStore) VerifyRecoveryCode(userID, recoveryCode string) bool {
+	return false
 }
 
 func (e inMemoryStore) Delete(userID string) error {

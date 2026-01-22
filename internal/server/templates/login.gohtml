@@ -15,7 +15,7 @@
 <form method="post" action="{{ .query }}" style="width: 240px; max-width: 100%; margin: 0 auto; display: flex; flex-direction: column;">
     {{- if .code_required }}
     <input type="text" name="code" placeholder="Code" pattern="[0-9]+" autofocus>
-    <small><a href="setup-2fa?client_id={{ .client_id }}&login_query={{ .login_query_base64 }}">Device or code lost?</a></small>
+    <small><a href="setup-2fa?client_id={{ .client_id }}&login_query={{ .login_query_base64 }}">Device or key lost?</a></small>
     <button type="submit" style="margin: 1em auto;">Verify</button>
     {{- else }}
     <input type="text" name="user_id" placeholder="Username"{{ with .user_id }} value="{{ . }}" {{ end }}autofocus>

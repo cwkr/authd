@@ -8,7 +8,9 @@ import (
 
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/sqlutil"
+	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/pquerna/otp"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type sqlStore struct {
@@ -64,13 +66,35 @@ func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
 	}
 }
 
-func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) error {
-	// UPDATE people SET otpauth_uri = $2, last_modified = now() WHERE lower(user_id) = lower($1)
-	log.Printf("SQL: %s; -- %s", e.settings.Update, userID)
-	if _, err := e.dbconn.Exec(e.settings.Update, userID, keyWrapper.URI()); err != nil {
-		return err
+func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
+	var recoveryCode = stringutil.RandomAlphanumericString(10)
+	if recoveryCodeHash, err := bcrypt.GenerateFromPassword([]byte(recoveryCode), 11); err != nil {
+		return "", err
+	} else {
+		// UPDATE people SET otpauth_uri = $2, recovery_code_hash = $3, last_modified = now() WHERE lower(user_id) = lower($1)
+		log.Printf("SQL: %s; -- %s", e.settings.Update, userID)
+		if _, err := e.dbconn.Exec(e.settings.Update, userID, keyWrapper.URI(), recoveryCodeHash); err != nil {
+			return "", err
+		}
+		return recoveryCode, nil
 	}
-	return nil
+}
+
+func (e sqlStore) VerifyRecoveryCode(userID, recoveryCode string) bool {
+	// SELECT recovery_code_hash FROM people WHERE lower(user_id) = lower($1)
+	log.Printf("SQL: %s; -- %s", e.settings.RecoveryCodeQuery, userID)
+	var row = e.dbconn.QueryRow(e.settings.RecoveryCodeQuery, userID)
+	var recoveryCodeHash string
+	if err := row.Scan(&recoveryCodeHash); err == nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(recoveryCodeHash), []byte(recoveryCode)); err != nil {
+			log.Printf("!!! recovery code comparison failed: %v", err)
+		} else {
+			return true
+		}
+	} else {
+		log.Printf("!!! Query for recovery code failed: %v", err)
+	}
+	return false
 }
 
 func (e sqlStore) Delete(userID string) error {
