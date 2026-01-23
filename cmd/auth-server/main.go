@@ -56,7 +56,8 @@ func main() {
 		setEmail             string
 		setDepartment        string
 		generateTOTPSecret   bool
-		totpHashAlgorithm    string
+		totpAlgorithm        string
+		totpDigits           int
 		keySize              int
 		keyID                string
 		saveSettings         bool
@@ -77,7 +78,8 @@ func main() {
 	flag.StringVar(&setEmail, "email", "", "set user email")
 	flag.StringVar(&setDepartment, "department", "", "set user department")
 	flag.BoolVar(&generateTOTPSecret, "totp", false, "enable Time-based One-time Password (TOTP)")
-	flag.StringVar(&totpHashAlgorithm, "totp-hash-algorithm", "sha256", "totp hash algorithm")
+	flag.StringVar(&totpAlgorithm, "totp-algorithm", "sha256", "totp hash algorithm")
+	flag.IntVar(&totpDigits, "totp-digits", 6, "totp digits")
 	flag.IntVar(&keySize, "key-size", 2048, "generated signing key size")
 	flag.StringVar(&keyID, "key-id", "sigkey", "set generated signing key id")
 	flag.BoolVar(&saveSettings, "save", false, "save config and exit")
@@ -195,7 +197,7 @@ func main() {
 			log.Fatal("!!! missing password")
 		}
 		if generateTOTPSecret {
-			if kw, err := otpauth.NewKeyWrapper(serverSettings.Issuer, setUserID, totpHashAlgorithm, ""); err != nil {
+			if kw, err := otpauth.NewKeyWrapper(serverSettings.Issuer, setUserID, totpAlgorithm, "", totpDigits); err != nil {
 				log.Fatalf("!!! %s", err)
 			} else {
 				user.OTPAuthURI = kw.URI()

@@ -3,12 +3,14 @@ package server
 import (
 	_ "embed"
 	"encoding/base64"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/cwkr/authd/internal/htmlutil"
@@ -63,7 +65,8 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if uid, active, verified := o.sessionManager.CheckSession(r, client); active {
 		var (
-			algorithm                = strings.TrimSpace(r.FormValue("alg"))
+			algorithm                = strings.TrimSpace(r.FormValue("algorithm"))
+			digits                   int
 			secret                   string
 			errorMessage             string
 			keyWrapper               *otpauth.KeyWrapper
@@ -73,11 +76,17 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			postSetupContinuationURI string
 		)
 
+		digits, _ = strconv.Atoi(strings.TrimSpace(r.FormValue("digits")))
+		if digits != 6 && digits != 8 {
+			digits = 6
+		}
+
 		keyWrapper, _ = o.otpauthStore.Lookup(uid)
 		enabled = keyWrapper != nil
 
 		if keyWrapper != nil {
 			algorithm = strings.ToLower(keyWrapper.Algorithm())
+			digits = keyWrapper.Digits()
 		}
 
 		if algorithm == "" {
@@ -94,7 +103,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			secret = strings.TrimSpace(r.PostFormValue("secret"))
 
 			if secret != "" && code != "" {
-				if kw, err := otpauth.NewKeyWrapper(o.issuer, uid, algorithm, secret); err != nil {
+				if kw, err := otpauth.NewKeyWrapper(o.issuer, uid, algorithm, secret, digits); err != nil {
 					errorMessage = err.Error()
 				} else {
 					if kw.VerifyCode(code) {
@@ -165,7 +174,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var imageURL string
 
 		if keyWrapper == nil {
-			if kw, err := otpauth.NewKeyWrapper(o.issuer, uid, algorithm, secret); err != nil {
+			if kw, err := otpauth.NewKeyWrapper(o.issuer, uid, algorithm, secret, digits); err != nil {
 				htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 				return
 			} else {
@@ -187,6 +196,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"query":                       template.HTML("?" + r.URL.RawQuery),
 			"version":                     o.version,
 			"algorithm":                   algorithm,
+			"digits":                      fmt.Sprint(digits),
 			"readonly_otpauth_store":      o.otpauthStore.ReadOnly(),
 			"secret":                      keyWrapper.Secret(),
 			"error_message":               errorMessage,

@@ -22,7 +22,7 @@ type KeyWrapper struct {
 	key *otp.Key
 }
 
-func NewKeyWrapper(issuer, userID, algorithm, secret string) (*KeyWrapper, error) {
+func NewKeyWrapper(issuer, userID, algorithm, secret string, digits int) (*KeyWrapper, error) {
 	var otpID string
 	if issuerURL, err := url.Parse(issuer); err != nil {
 		return nil, err
@@ -35,6 +35,7 @@ func NewKeyWrapper(issuer, userID, algorithm, secret string) (*KeyWrapper, error
 	var opts = totp.GenerateOpts{
 		Issuer:      otpID,
 		AccountName: userID,
+		Digits:      otp.Digits(digits),
 	}
 	if strings.EqualFold(algorithm, "sha256") {
 		opts.Algorithm = otp.AlgorithmSHA256
@@ -47,7 +48,7 @@ func NewKeyWrapper(issuer, userID, algorithm, secret string) (*KeyWrapper, error
 		var sb, _ = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 		opts.Secret = sb
 	}
-	log.Printf("Generating TOTP Key for %s@%s using %s", userID, otpID, opts.Algorithm)
+	log.Printf("Generating TOTP Key for %s@%s using %s with %d digits", userID, otpID, opts.Algorithm, digits)
 	if totpKey, err := totp.Generate(opts); err != nil {
 		return nil, err
 	} else {
@@ -91,6 +92,10 @@ func (k KeyWrapper) Secret() string {
 
 func (k KeyWrapper) Algorithm() string {
 	return k.key.Algorithm().String()
+}
+
+func (k KeyWrapper) Digits() int {
+	return int(k.key.Digits())
 }
 
 type Store interface {
