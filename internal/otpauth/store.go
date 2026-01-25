@@ -22,6 +22,14 @@ type KeyWrapper struct {
 	key *otp.Key
 }
 
+func NewKeyWrapperFromURI(otpauthURI string) (*KeyWrapper, error) {
+	if k, err := otp.NewKeyFromURL(otpauthURI); err != nil {
+		return nil, err
+	} else {
+		return &KeyWrapper{key: k}, nil
+	}
+}
+
 func NewKeyWrapper(issuer, userID, algorithm, secret string, digits int) (*KeyWrapper, error) {
 	var otpID string
 	if issuerURL, err := url.Parse(issuer); err != nil {

@@ -378,6 +378,15 @@ func main() {
 			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 				Methods(http.MethodOptions, http.MethodPut)
 		}
+
+		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.LookupOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			Methods(http.MethodGet, http.MethodOptions)
+		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ValidateOTPCodeHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			Methods(http.MethodPost)
+		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.PutOTPAuthHandler(otpauthStore, serverSettings.Issuer), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			Methods(http.MethodPut)
+		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ResetOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			Methods(http.MethodDelete)
 	}
 
 	log.Printf("Listening on http://localhost:%d%s/", serverSettings.Port, basePath)

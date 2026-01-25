@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const ErrorAccessDenied = "access_denied"
+const ErrorUnsupportedMediaType = "unsupported_media_type"
 
 type peopleAPIHandler struct {
 	peopleStore    people.Store
@@ -126,6 +126,11 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 
 		httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions, http.MethodPut}, true)
 
+		if !httputil.IsJSON(r.Header.Get("Content-Type")) {
+			oauth2.Error(w, ErrorUnsupportedMediaType, "", http.StatusUnsupportedMediaType)
+			return
+		}
+
 		var person people.Person
 
 		if bytes, err := io.ReadAll(r.Body); err == nil {
@@ -140,11 +145,6 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 
 		var userID = mux.Vars(r)["user_id"]
 
-		if !strings.EqualFold(userID, r.Context().Value("user_id").(string)) {
-			oauth2.Error(w, ErrorAccessDenied, "", http.StatusForbidden)
-			return
-		}
-
 		if err := peopleStore.Put(userID, &person); err != nil {
 			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
@@ -152,10 +152,6 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-type PasswordChange struct {
-	Password string `json:"password"`
 }
 
 func ChangePasswordHandler(peopleStore people.Store) http.Handler {
@@ -169,21 +165,35 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 			return
 		}
 
-		var passwordChange PasswordChange
+		var newPassword string
 
-		if bytes, err := io.ReadAll(r.Body); err == nil {
-			if err := json.Unmarshal(bytes, &passwordChange); err != nil {
+		if httputil.IsJSON(r.Header.Get("Content-Type")) {
+			var passwordChange = make(map[string]string)
+			if bytes, err := io.ReadAll(r.Body); err == nil {
+				if err := json.Unmarshal(bytes, &passwordChange); err != nil {
+					oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+					return
+				}
+				newPassword = passwordChange["password"]
+			} else {
 				oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
 				return
 			}
+		} else if httputil.IsFormData(r.Header.Get("Content-Type")) {
+			newPassword = strings.TrimSpace(r.PostFormValue("password"))
 		} else {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+			oauth2.Error(w, ErrorUnsupportedMediaType, "", http.StatusUnsupportedMediaType)
+			return
+		}
+
+		if newPassword == "" {
+			oauth2.Error(w, oauth2.ErrorInvalidRequest, "password is required", http.StatusBadRequest)
 			return
 		}
 
 		var userID = mux.Vars(r)["user_id"]
 
-		if err := peopleStore.ChangePassword(userID, passwordChange.Password); err != nil {
+		if err := peopleStore.ChangePassword(userID, newPassword); err != nil {
 			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return

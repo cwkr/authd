@@ -56,7 +56,7 @@ func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
 		log.Printf("!!! Query for otpauth credentials failed: %v", row.Err())
 		return nil, row.Err()
 	}
-	if !otpauthURI.Valid {
+	if !otpauthURI.Valid || strings.TrimSpace(otpauthURI.String) == "" {
 		return nil, ErrNotFound
 	}
 	if k, err := otp.NewKeyFromURL(otpauthURI.String); err != nil {

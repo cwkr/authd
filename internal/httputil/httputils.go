@@ -2,8 +2,10 @@ package httputil
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -57,4 +59,20 @@ func Cache(w http.ResponseWriter, duration time.Duration) {
 	var gmt, _ = time.LoadLocation("GMT")
 	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", int64(duration.Seconds())))
 	w.Header().Set("Expires", time.Now().Add(duration).In(gmt).Format(time.RFC1123))
+}
+
+func IsJSON(contentType string) bool {
+	var mediaType, _, err = mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(mediaType, "application") && strings.HasSuffix(mediaType, "json")
+}
+
+func IsFormData(contentType string) bool {
+	var mediaType, _, err = mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return slices.Contains([]string{"application/x-www-form-urlencoded", "multipart/form-data"}, mediaType)
 }
