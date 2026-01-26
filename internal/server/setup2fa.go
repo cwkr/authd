@@ -95,8 +95,8 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method == http.MethodPost {
 			var (
-				code             = strings.TrimSpace(r.PostFormValue("code"))
-				recoveryCode     = strings.TrimSpace(r.PostFormValue("recovery_code"))
+				code             = stringutil.StripSpaces(r.PostFormValue("code"))
+				recoveryCode     = strings.ToUpper(stringutil.StripSpaces(r.PostFormValue("recovery_code")))
 				loginQueryBase64 = strings.TrimSpace(r.URL.Query().Get("login_query"))
 				redirectURI      = strings.TrimSpace(r.URL.Query().Get("post_setup_redirect_uri"))
 			)

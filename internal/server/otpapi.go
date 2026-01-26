@@ -12,6 +12,7 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/otpauth"
+	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/gorilla/mux"
 )
 
@@ -99,9 +100,9 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 				return
 			}
 
-			code = strings.TrimSpace(requestMap["code"])
+			code = stringutil.StripSpaces(requestMap["code"])
 		} else {
-			code = strings.TrimSpace(r.PostFormValue("code"))
+			code = stringutil.StripSpaces(r.PostFormValue("code"))
 		}
 
 		if code == "" {
@@ -156,7 +157,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 				oauth2.Error(w, oauth2.ErrorInvalidRequest, "recovery code must be base64 encoded", http.StatusBadRequest)
 				return
 			} else {
-				recoveryCode = strings.TrimSpace(string(recoveryCodeBytes))
+				recoveryCode = strings.ToUpper(stringutil.StripSpaces(string(recoveryCodeBytes)))
 			}
 		}
 
@@ -254,7 +255,7 @@ func ResetOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 				oauth2.Error(w, oauth2.ErrorInvalidRequest, "recovery code must be base64 encoded", http.StatusBadRequest)
 				return
 			} else {
-				recoveryCode = strings.TrimSpace(string(recoveryCodeBytes))
+				recoveryCode = strings.ToUpper(stringutil.StripSpaces(string(recoveryCodeBytes)))
 			}
 		}
 

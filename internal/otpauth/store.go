@@ -2,12 +2,14 @@ package otpauth
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"image/png"
 	"log"
+	"math/big"
 	"net/url"
 	"strings"
 	"time"
@@ -113,4 +115,21 @@ type Store interface {
 	Delete(userID string) error
 	Ping() error
 	ReadOnly() bool
+}
+
+func GenerateRecoveryCode() string {
+	const letters = "123456789ACDEFHJKMNPQRTVWXYZ"
+	const length = 16 + 3
+	var b = make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		if i == 4 || i == 9 || i == 14 {
+			b[i] = ' '
+		} else {
+			num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+			b[i] = letters[num.Int64()]
+		}
+	}
+
+	return string(b)
 }

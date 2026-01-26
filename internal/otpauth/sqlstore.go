@@ -67,8 +67,8 @@ func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
 }
 
 func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
-	var recoveryCode = stringutil.RandomAlphanumericString(10)
-	if recoveryCodeHash, err := bcrypt.GenerateFromPassword([]byte(recoveryCode), 11); err != nil {
+	var recoveryCode = GenerateRecoveryCode()
+	if recoveryCodeHash, err := bcrypt.GenerateFromPassword([]byte(stringutil.StripSpaces(recoveryCode)), 11); err != nil {
 		return "", err
 	} else {
 		// UPDATE people SET otpauth_uri = $2, recovery_code_hash = $3, last_modified = now() WHERE lower(user_id) = lower($1)
@@ -98,7 +98,7 @@ func (e sqlStore) VerifyRecoveryCode(userID, recoveryCode string) bool {
 }
 
 func (e sqlStore) Delete(userID string) error {
-	// UPDATE people SET otpauth_uri = null, last_modified = now() WHERE lower(user_id) = lower($1)
+	// UPDATE people SET otpauth_uri = null, recovery_code_hash = null, last_modified = now() WHERE lower(user_id) = lower($1)
 	log.Printf("SQL: %s; -- %s", e.settings.Delete, userID)
 	if _, err := e.dbconn.Exec(e.settings.Delete, userID); err != nil {
 		return err

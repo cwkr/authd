@@ -107,7 +107,7 @@ func (s *Server) LoadKeys(dir string) error {
 		return errors.New("missing or malformed signing key")
 	}
 
-	var keys = append([]string{s.PublicKeyPEM()}, s.AdditionalKeys...)
+	var keys = append([]string{s.PublicKeyPEM(true)}, s.AdditionalKeys...)
 
 	s.keySetProvider = keyset.NewProvider(dir, keys, time.Duration(s.KeysTTL)*time.Second)
 	return err
@@ -132,14 +132,16 @@ func (s Server) PublicKey() *rsa.PublicKey {
 	return &s.rsaSigningKey.PublicKey
 }
 
-func (s Server) PublicKeyPEM() string {
+func (s Server) PublicKeyPEM(headers bool) string {
 	var pubASN1, _ = x509.MarshalPKIXPublicKey(s.PublicKey())
-
-	var pubBytes = pem.EncodeToMemory(&pem.Block{
-		Type:    "PUBLIC KEY",
-		Bytes:   pubASN1,
-		Headers: map[string]string{keyset.HeaderKeyID: s.rsaSigningKeyID},
-	})
+	var pemBlock = pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubASN1,
+	}
+	if headers {
+		pemBlock.Headers = map[string]string{keyset.HeaderKeyID: s.rsaSigningKeyID}
+	}
+	var pubBytes = pem.EncodeToMemory(&pemBlock)
 	return string(pubBytes)
 }
 

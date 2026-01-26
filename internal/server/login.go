@@ -90,7 +90,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		password = r.PostFormValue("password")
-		code = strings.TrimSpace(r.PostFormValue("code"))
+		code = stringutil.StripSpaces(r.PostFormValue("code"))
 
 		// debug output of parameters
 		log.Printf("user_id=%q password=%q code=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), strings.Repeat("*", utf8.RuneCountInString(code)))

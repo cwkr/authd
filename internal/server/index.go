@@ -70,7 +70,7 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"base_path":       i.basePath,
 		"issuer":          strings.TrimRight(i.serverSettings.Issuer, "/"),
 		"title":           title,
-		"public_key":      i.serverSettings.PublicKeyPEM(),
+		"public_key":      i.serverSettings.PublicKeyPEM(false),
 		"state":           fmt.Sprint(rand.Int()),
 		"nonce":           stringutil.RandomAlphanumericString(10),
 		"scopes":          strings.Fields(i.scope),

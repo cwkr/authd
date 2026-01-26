@@ -156,6 +156,11 @@ func (p sqlStore) ReadOnly() bool {
 	return false
 }
 
+func toNullString(arg string) sql.NullString {
+	var str = strings.TrimSpace(arg)
+	return sql.NullString{String: str, Valid: str != ""}
+}
+
 func (p sqlStore) Put(userID string, person *Person) error {
 	// UPDATE people SET given_name = $2, family_name = $3, email = $4, department = $5,
 	// birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, room_number = $8, street_address = $9, locality = $10,
@@ -169,16 +174,16 @@ func (p sqlStore) Put(userID string, person *Person) error {
 	if _, err := p.dbconn.Exec(
 		p.settings.Update,
 		userID,
-		strings.TrimSpace(person.GivenName),
-		strings.TrimSpace(person.FamilyName),
-		strings.TrimSpace(person.Email),
-		strings.TrimSpace(person.Department),
-		strings.TrimSpace(person.Birthdate),
-		strings.TrimSpace(person.PhoneNumber),
-		strings.TrimSpace(person.RoomNumber),
-		strings.TrimSpace(person.StreetAddress),
-		strings.TrimSpace(person.Locality),
-		strings.TrimSpace(person.PostalCode),
+		toNullString(person.GivenName),
+		toNullString(person.FamilyName),
+		toNullString(person.Email),
+		toNullString(person.Department),
+		toNullString(person.Birthdate),
+		toNullString(person.PhoneNumber),
+		toNullString(person.RoomNumber),
+		toNullString(person.StreetAddress),
+		toNullString(person.Locality),
+		toNullString(person.PostalCode),
 	); err != nil {
 		return err
 	}

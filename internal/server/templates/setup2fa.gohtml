@@ -112,13 +112,13 @@
     <input type="hidden" name="algorithm" value="{{ .algorithm }}">
     <input type="hidden" name="digits" value="{{ .digits }}">
     <input type="hidden" name="secret" value="{{ .secret }}">
-    <input type="text" name="code" placeholder="Code" pattern="[0-9]+" autofocus required>
+    <input type="text" name="code" placeholder="Code" pattern="[ 0-9]+" autofocus required>
     <button type="submit" style="margin: 1em auto;">Enable</button>
 </form>
 {{ end }}
 {{ if and .user_2fa_enabled (not .readonly_otpauth_store) }}
     <form method="post" action="{{ .query }}">
-        <input type="password" name="recovery_code" placeholder="Recovery code" autofocus required>
+        <input type="password" name="recovery_code" placeholder="Recovery code" pattern="[ 1-9A-Z]+" autofocus required>
         <button type="submit" style="margin: 1em auto;">Disable</button>
     </form>
 {{ end }}
