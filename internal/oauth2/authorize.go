@@ -12,7 +12,7 @@ import (
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/realms"
+	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server/sessions"
 	"github.com/cwkr/authd/internal/stringutil"
@@ -37,7 +37,7 @@ type authorizeHandler struct {
 	sessionManager sessions.SessionManager
 	peopleStore    people.Store
 	clientStore    clients.Store
-	realms         realms.Realms
+	presets        presets.Presets
 	scope          string
 }
 
@@ -102,7 +102,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch responseType {
 	case ResponseTypeToken:
 		timing.Start("jwtgen")
-		var accessToken, err = a.tokenService.GenerateAccessToken(user, client.Realm, user.UserID, clientID, IntersectScope(a.scope, scope))
+		var accessToken, err = a.tokenService.GenerateAccessToken(user, client.PresetID, user.UserID, clientID, IntersectScope(a.scope, scope))
 		if err != nil {
 			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
 			return
@@ -110,7 +110,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("jwtgen")
 		redirectParams.Set("access_token", accessToken)
 		redirectParams.Set("token_type", "Bearer")
-		redirectParams.Set("expires_in", fmt.Sprint(a.realms[strings.ToLower(client.Realm)].AccessTokenTTL))
+		redirectParams.Set("expires_in", fmt.Sprint(a.presets[strings.ToLower(client.PresetID)].AccessTokenTTL))
 
 		httputil.NoCache(w)
 		timing.Report(w)
@@ -124,7 +124,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timing.Start("jwtgen")
-		var authCode, err = a.tokenService.GenerateAuthCode(client.Realm, user.UserID, clientID, IntersectScope(a.scope, scope), challenge, nonce)
+		var authCode, err = a.tokenService.GenerateAuthCode(client.PresetID, user.UserID, clientID, IntersectScope(a.scope, scope), challenge, nonce)
 		if err != nil {
 			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
 			return
@@ -140,14 +140,14 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func AuthorizeHandler(basePath string, tokenService TokenCreator, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, realms realms.Realms, scope string) http.Handler {
+func AuthorizeHandler(basePath string, tokenService TokenCreator, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, presets presets.Presets, scope string) http.Handler {
 	return &authorizeHandler{
 		basePath:       basePath,
 		tokenService:   tokenService,
 		sessionManager: sessionManager,
 		peopleStore:    peopleStore,
 		clientStore:    clientStore,
-		realms:         realms,
+		presets:        presets,
 		scope:          scope,
 	}
 }

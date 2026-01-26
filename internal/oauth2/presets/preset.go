@@ -1,6 +1,6 @@
-package realms
+package presets
 
-type Realm struct {
+type Preset struct {
 	SigningAlgorithm       string            `json:"signing_algorithm,omitempty"`
 	Audiences              []string          `json:"audiences,omitempty"`
 	AccessTokenExtraClaims map[string]string `json:"access_token_extra_claims,omitempty"`
@@ -13,4 +13,4 @@ type Realm struct {
 	Require2FA             bool              `json:"require_2fa"`
 }
 
-type Realms map[string]Realm
+type Presets map[string]Preset

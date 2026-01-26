@@ -64,7 +64,7 @@ and will load it's content when found.
       "redirect_uri_pattern": "https?:\\/\\/localhost(:\\d+)?\\/"
     }
   },
-  "realms": {
+  "presets": {
     "": {
       "signing_algorithm": "RS256",
       "access_token_ttl": 3600,
@@ -73,50 +73,6 @@ and will load it's content when found.
       "session_name": "_auth",
       "session_ttl": 28800
     }
-  },
-}
-```
-
-#### Custom token claims
-
-| placeholder variable          |
-|-------------------------------|
-| `$birthdate`                  |
-| `$client_id`                  |
-| `$department`                 |
-| `$email`                      |
-| `$family_name`                |
-| `$given_name`                 |
-| `$groups`                     |
-| `$groups_space_delimited`     |
-| `$groups_comma_delimited`     |
-| `$groups_semicolon_delimited` |
-| `$locality`                   |
-| `$phone_number`               |
-| `$postal_code`                |
-| `$roles`                      |
-| `$roles_space_delimited`      |
-| `$roles_comma_delimited`      |
-| `$roles_semicolon_delimited`  |
-| `$room_number`                |
-| `$street_address`             |
-| `$subject`                    |
-| `$user_id`                    |
-
-```jsonc
-{
-  // define custom access token claims
-  "access_token_extra_claims": {
-    "prn": "$subject",
-    "email": "$email",
-    "givenName": "$given_name",
-    "groups": "$groups_semicolon_delimited",
-    "sn": "$family_name",
-    "user_id": "$user_id"
-  },
-  // define custom id token claims
-  "id_token_extra_claims": {
-    "groups": "$groups"
   },
 }
 ```
@@ -162,7 +118,7 @@ Client column names are mapped by name:
 | `client_id`                     |
 | `redirect_uri_pattern`          |
 | `secret_hash`                   |
-| `realm`                         |
+| `preset`                        |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
 
@@ -170,7 +126,7 @@ Client column names are mapped by name:
 {
   "client_store": {
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
-    "query": "SELECT redirect_uri_pattern, secret_hash, realm, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
+    "query": "SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
     "query_session_names": "SELECT client_id, session_name FROM clients"
   }
 }
@@ -217,7 +173,7 @@ Client column names are mapped case-sensitive by name:
 | `client_id`                     |
 | `redirect_uri_pattern`          |
 | `secret_hash`                   |
-| `realm`                         |
+| `preset`                        |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
 
@@ -225,7 +181,7 @@ Client column names are mapped case-sensitive by name:
 {
   "client_store": {
     "uri": "oracle://authserver:trustno1@localhost:1521/orcl?charset=UTF8",
-    "query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", realm \"realm\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
+    "query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
     "query_session_names": "SELECT client_id \"client_id\", session_name \"session_name\" FROM clients"
   }
 }
@@ -260,30 +216,69 @@ Client column names are mapped case-sensitive by name:
 }
 ```
 
-#### Realms
+#### Presets
+
+Presets predefine session and token live times as well as allow to specify custom token claims. Each client must have
+a preset assigned.
+
+| token extra claim placeholder variable |
+|----------------------------------------|
+| `$birthdate`                           |
+| `$client_id`                           |
+| `$department`                          |
+| `$email`                               |
+| `$family_name`                         |
+| `$given_name`                          |
+| `$groups`                              |
+| `$groups_space_delimited`              |
+| `$groups_comma_delimited`              |
+| `$groups_semicolon_delimited`          |
+| `$locality`                            |
+| `$phone_number`                        |
+| `$postal_code`                         |
+| `$roles`                               |
+| `$roles_space_delimited`               |
+| `$roles_comma_delimited`               |
+| `$roles_semicolon_delimited`           |
+| `$room_number`                         |
+| `$street_address`                      |
+| `$subject`                             |
+| `$user_id`                             |
 
 | audience placeholder variable |
 |-------------------------------|
 | `$client_id`                  |
 | `$issuer`                     |
-| `$realm`                      |
 
 ```jsonc
 {
   "clients": {
     "foobar": {
-      "realm": "example"
+      "preset": "example"
     }
   },
-  "realms": {
+  "presets": {
     "example": {
       "signing_algorithm": "PS256",
-      "audiences": ["$client_id", "$realm", "https://example.org"],
+      "audiences": ["$client_id", "https://example.org"],
       "access_token_ttl": 900,
       "refresh_token_ttl": 28800,
       "id_token_ttl": 28800,
       "session_name": "_auth_example",
-      "session_ttl": 28800
+      "session_ttl": 28800,
+      // define custom access token claims
+      "access_token_extra_claims": {
+        "prn": "$subject",
+        "email": "$email",
+        "givenName": "$given_name",
+        "groups": "$groups_semicolon_delimited",
+        "sn": "$family_name",
+        "user_id": "$user_id"
+      },
+      // define custom id token claims
+      "id_token_extra_claims": {
+        "groups": "$groups"
+      },
     }
   },
 }

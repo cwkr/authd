@@ -13,7 +13,7 @@ import (
 
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/realms"
+	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
@@ -37,7 +37,7 @@ type Server struct {
 	Clients                 map[string]clients.Client         `json:"clients,omitempty"`
 	ClientStore             *clients.StoreSettings            `json:"client_store,omitempty"`
 	ExtraScope              string                            `json:"extra_scope,omitempty"`
-	Realms                  realms.Realms                     `json:"realms,omitempty"`
+	Presets                 presets.Presets                   `json:"presets,omitempty"`
 	CookieSecret            string                            `json:"cookie_secret"`
 	UserinfoExtraClaims     map[string]string                 `json:"userinfo_extra_claims,omitempty"`
 	PeopleStore             *people.StoreSettings             `json:"people_store,omitempty"`
@@ -62,7 +62,7 @@ func NewDefault(port int) *Server {
 	return &Server{
 		Issuer: fmt.Sprintf("http://localhost:%d", port),
 		Port:   port,
-		Realms: map[string]realms.Realm{
+		Presets: map[string]presets.Preset{
 			"": {
 				SigningAlgorithm: "RS256",
 				AccessTokenTTL:   3_600,

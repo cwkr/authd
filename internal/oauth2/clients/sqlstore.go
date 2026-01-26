@@ -15,7 +15,7 @@ import (
 type sqlClient struct {
 	RedirectURIPattern         sql.NullString `db:"redirect_uri_pattern"`
 	SecretHash                 sql.NullString `db:"secret_hash"`
-	RealmName                  sql.NullString `db:"realm"`
+	PresetID                   sql.NullString `db:"preset"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
 }
@@ -24,7 +24,7 @@ func (s *sqlClient) Client() *Client {
 	return &Client{
 		RedirectURIPattern:         s.RedirectURIPattern.String,
 		SecretHash:                 s.SecretHash.String,
-		Realm:                      s.RealmName.String,
+		PresetID:                   s.PresetID.String,
 		DisableImplicit:            s.DisableImplicit.Bool,
 		EnableRefreshTokenRotation: s.EnableRefreshTokenRotation.Bool,
 	}
@@ -71,7 +71,7 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 
 	var client sqlClient
 	log.Printf("SQL: %s; -- %s", s.settings.Query, clientID)
-	// SELECT redirect_uri_pattern, secret_hash, realm, disable_implicit, enable_refresh_token_rotation
+	// SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation
 	// FROM clients WHERE lower(client_id) = lower($1)
 	if rows, err := s.dbconn.Query(s.settings.Query, clientID); err == nil {
 		if err := scan.RowStrict(&client, rows); err != nil {

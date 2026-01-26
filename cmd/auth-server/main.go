@@ -48,7 +48,7 @@ func main() {
 		settingsFilename     string
 		setClientID          string
 		setClientSecret      string
-		setClientRealm       string
+		setClientPresetID    string
 		setUserID            string
 		setPassword          string
 		setGivenName         string
@@ -70,7 +70,7 @@ func main() {
 	flag.StringVar(&configFilename, "config", "", "config file name")
 	flag.StringVar(&setClientID, "client-id", "", "set client id")
 	flag.StringVar(&setClientSecret, "client-secret", "", "set client secret")
-	flag.StringVar(&setClientRealm, "client-realm", "", "set client realm")
+	flag.StringVar(&setClientPresetID, "client-preset", "", "set client preset")
 	flag.StringVar(&setUserID, "user-id", "", "set user id")
 	flag.StringVar(&setPassword, "password", "", "set user password")
 	flag.StringVar(&setGivenName, "given-name", "", "set user given name")
@@ -163,8 +163,8 @@ func main() {
 				client.SecretHash = string(secretHash)
 			}
 		}
-		if setClientRealm != "" {
-			client.Realm = setClientRealm
+		if setClientPresetID != "" {
+			client.PresetID = setClientPresetID
 		}
 		serverSettings.Clients[setClientID] = client
 	}
@@ -229,8 +229,8 @@ func main() {
 	}
 
 	var (
-		scope  = strings.TrimSpace(oauth2.OIDCDefaultScope + " " + serverSettings.ExtraScope)
-		realms = maputil.LowerKeys(serverSettings.Realms)
+		scope   = strings.TrimSpace(oauth2.OIDCDefaultScope + " " + serverSettings.ExtraScope)
+		presets = maputil.LowerKeys(serverSettings.Presets)
 	)
 
 	tokenCreator, err = oauth2.NewTokenCreator(
@@ -238,7 +238,7 @@ func main() {
 		serverSettings.KeyID(),
 		serverSettings.Issuer,
 		scope,
-		realms,
+		presets,
 		serverSettings.Roles,
 	)
 	if err != nil {
@@ -264,7 +264,7 @@ func main() {
 	} else {
 		log.Fatalf("!!! %s", err)
 	}
-	var sessionManager = sessions2.NewSessionManager(sessionStore, realms)
+	var sessionManager = sessions2.NewSessionManager(sessionStore, presets)
 
 	var dbs = make(map[string]*sql.DB)
 
@@ -337,7 +337,7 @@ func main() {
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/favicon-32x32.png", server.Favicon32x32Handler()).
 		Methods(http.MethodGet)
-	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, realms, serverSettings.Issuer)).
+	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, presets, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
 	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
 	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
@@ -347,16 +347,16 @@ func main() {
 
 	router.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider())).
 		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, realms, scope)).
+	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, presets, scope)).
 		Methods(http.MethodOptions, http.MethodPost)
-	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, sessionManager, peopleStore, clientStore, realms, scope)).
+	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, sessionManager, peopleStore, clientStore, presets, scope)).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation)).
 		Methods(http.MethodGet, http.MethodOptions)
 	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.UserinfoExtraClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodOptions)
 
-	router.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, realms, otpauthStore, basePath, version, serverSettings.Issuer)).
+	router.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, presets, otpauthStore, basePath, version, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
 
 	if serverSettings.EnableTokenRevocation {
