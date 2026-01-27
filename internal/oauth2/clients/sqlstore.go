@@ -64,16 +64,16 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 		return c, nil
 	}
 
-	if strings.TrimSpace(s.settings.Query) == "" {
+	if strings.TrimSpace(s.settings.LookupQuery) == "" {
 		log.Print("!!! SQL query empty")
 		return nil, nil
 	}
 
 	var client sqlClient
-	log.Printf("SQL: %s; -- %s", s.settings.Query, clientID)
+	log.Printf("SQL: %s; -- %s", s.settings.LookupQuery, clientID)
 	// SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation
 	// FROM clients WHERE lower(client_id) = lower($1)
-	if rows, err := s.dbconn.Query(s.settings.Query, clientID); err == nil {
+	if rows, err := s.dbconn.Query(s.settings.LookupQuery, clientID); err == nil {
 		if err := scan.RowStrict(&client, rows); err != nil {
 			log.Printf("!!! Scan client failed: %v", err)
 			if errors.Is(err, sql.ErrNoRows) {
@@ -99,15 +99,15 @@ func (s *sqlStore) List() ([]string, error) {
 
 	var sqlClientIDs []string
 
-	log.Printf("SQL: %s", s.settings.QuerySessionNames)
-	// SELECT client_id FROM sqlClientIDs
-	if rows, err := s.dbconn.Query(s.settings.QuerySessionNames); err == nil {
+	log.Printf("SQL: %s", s.settings.ListQuery)
+	// SELECT client_id FROM clients
+	if rows, err := s.dbconn.Query(s.settings.ListQuery); err == nil {
 		if err := scan.RowsStrict(&sqlClientIDs, rows); err != nil {
-			log.Printf("!!! Scan session_names failed: %v", err)
+			log.Printf("!!! Scan client id list failed: %v", err)
 			return nil, err
 		}
 	} else {
-		log.Printf("!!! Query for session_names failed: %v", err)
+		log.Printf("!!! Query for client id list failed: %v", err)
 		return nil, err
 	}
 

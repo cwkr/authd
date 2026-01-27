@@ -7,6 +7,11 @@ import (
 	"unicode"
 )
 
+var TemplateFuncs = map[string]any{
+	"lower": strings.ToLower,
+	"upper": strings.ToUpper,
+}
+
 func IsAnyEmpty(strings ...string) bool {
 	for _, s := range strings {
 		if s == "" {

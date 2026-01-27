@@ -13,6 +13,7 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/settings"
 	"github.com/go-jose/go-jose/v3/jwt"
 )
@@ -103,6 +104,6 @@ func LogoutHandler(basePath string, serverSettings *settings.Server, sessionMana
 		serverSettings: serverSettings,
 		sessionManager: sessionManager,
 		clientStore:    clientStore,
-		tpl:            template.Must(template.New("logout").Parse(logoutTpl)),
+		tpl:            template.Must(template.New("logout").Funcs(stringutil.TemplateFuncs).Parse(logoutTpl)),
 	}
 }

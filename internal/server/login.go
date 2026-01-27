@@ -193,6 +193,6 @@ func LoginHandler(basePath string, sessionManager sessions.SessionManager, peopl
 		otpauthStore:   otpauthStore,
 		presets:        presets,
 		issuer:         issuer,
-		tpl:            template.Must(template.New("login").Parse(loginTpl)),
+		tpl:            template.Must(template.New("login").Funcs(stringutil.TemplateFuncs).Parse(loginTpl)),
 	}
 }

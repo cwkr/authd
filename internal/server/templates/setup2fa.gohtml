@@ -35,27 +35,31 @@
 <ul>
     <li>Android
         <ul>
-            <li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank">Google Authenticator</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank">Google Authenticator</a> (recommended)</li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.twofasapp" target="_blank">2FA Authenticator (2FAS)</a></li>
             <li><a href="https://play.google.com/store/apps/details?id=com.ibm.security.verifyapp" target="_blank">IBM Verify</a></li>
             <li><a href="https://play.google.com/store/apps/details?id=com.lastpass.authenticator" target="_blank">LastPass Authenticator</a></li>
             {{ if and (eq .algorithm "sha1") (eq .digits "6") -}}
             <li><a href="https://play.google.com/store/apps/details?id=com.azure.authenticator" target="_blank">Microsoft Authenticator</a> (SHA1 and 6 digits only)</li>
             {{- end }}
+            <li><a href="https://play.google.com/store/apps/details?id=de.ncp.authenticator.totp" target="_blank">NCP Authenticator</a></li>
             <li><a href="https://play.google.com/store/apps/details?id=oracle.idm.mobile.authenticator" target="_blank">Oracle Mobile Authenticator</a></li>
-            <li><a href="https://play.google.com/store/apps/details?id=org.fedorahosted.freeotp" target="_blank">FreeOTP Authenticator</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=org.fedorahosted.freeotp" target="_blank">FreeOTP Authenticator (Red Hat)</a></li>
             <li><a href="https://play.google.com/store/apps/details?id=com.sap.csi.authenticator" target="_blank">SAP Authenticator</a></li>
         </ul>
     </li>
     <li>iOS
         <ul>
-            <li><a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank">Google Authenticator</a></li>
+            <li><a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank">Google Authenticator</a> (recommended)</li>
+            <li><a href="https://apps.apple.com/app/2fa-authenticator-2fas/id1217793794" target="_blank">2FA Authenticator (2FAS)</a></li>
             <li><a href="https://apps.apple.com/app/ibm-verify/id1162190392" target="_blank">IBM Verify</a></li>
             <li><a href="https://apps.apple.com/app/lastpass-authenticator/id1079110004" target="_blank">LastPass Authenticator</a></li>
             {{ if and (eq .algorithm "sha1") (eq .digits "6") -}}
             <li><a href="https://apps.apple.com/app/microsoft-authenticator/id983156458" target="_blank">Microsoft Authenticator</a> (SHA1 and 6 digits only)</li>
             {{- end }}
+            <li><a href="https://apps.apple.com/app/ncp-authenticator/id1483468626" target="_blank">NCP Authenticator</a></li>
             <li><a href="https://apps.apple.com/app/oracle-mobile-authenticator/id835904829" target="_blank">Oracle Mobile Authenticator</a></li>
-            <li><a href="https://apps.apple.com/app/freeotp-authenticator/id872559395" target="_blank">FreeOTP Authenticator</a></li>
+            <li><a href="https://apps.apple.com/app/freeotp-authenticator/id872559395" target="_blank">FreeOTP Authenticator (Red Hat)</a></li>
             <li><a href="https://apps.apple.com/app/sap-authenticator/id868171828" target="_blank">SAP Authenticator</a></li>
         </ul>
     </li>
@@ -90,7 +94,7 @@
     </tr>
     <tr>
         <th>Algorithm</th>
-        <td>{{ .algorithm }}</td>
+        <td>{{ .algorithm | upper }}</td>
     </tr>
     <tr>
         <th>Digits</th>
@@ -112,13 +116,13 @@
     <input type="hidden" name="algorithm" value="{{ .algorithm }}">
     <input type="hidden" name="digits" value="{{ .digits }}">
     <input type="hidden" name="secret" value="{{ .secret }}">
-    <input type="text" name="code" placeholder="Code" pattern="[ 0-9]+" autofocus required>
+    <input type="text" name="code" placeholder="Code" pattern="[ 0-9]+" autocomplete="off" required>
     <button type="submit" style="margin: 1em auto;">Enable</button>
 </form>
 {{ end }}
 {{ if and .user_2fa_enabled (not .readonly_otpauth_store) }}
     <form method="post" action="{{ .query }}">
-        <input type="password" name="recovery_code" placeholder="Recovery code" pattern="[ 1-9A-Z]+" autofocus required>
+        <input type="text" name="recovery_code" placeholder="Recovery code" pattern="[ 1-9A-Z]+" autocomplete="off" required>
         <button type="submit" style="margin: 1em auto;">Disable</button>
     </form>
 {{ end }}

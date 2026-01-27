@@ -126,8 +126,8 @@ Client column names are mapped by name:
 {
   "client_store": {
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
-    "query": "SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
-    "query_session_names": "SELECT client_id, session_name FROM clients"
+    "lookup_query": "SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
+    "list_query": "SELECT client_id FROM clients"
   }
 }
 ```
@@ -181,8 +181,8 @@ Client column names are mapped case-sensitive by name:
 {
   "client_store": {
     "uri": "oracle://authserver:trustno1@localhost:1521/orcl?charset=UTF8",
-    "query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
-    "query_session_names": "SELECT client_id \"client_id\", session_name \"session_name\" FROM clients"
+    "lookup_query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
+    "list_query": "SELECT client_id \"client_id\" FROM clients"
   }
 }
 ```

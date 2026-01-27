@@ -192,7 +192,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 			return
 		}
 
-		var algorithm = "sha256"
+		var algorithm = "sha1"
 		if alg := strings.ToLower(strings.TrimSpace(otpAuthDetails.Algorithm)); alg != "" {
 			algorithm = alg
 		}

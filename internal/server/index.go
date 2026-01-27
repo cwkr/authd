@@ -92,7 +92,7 @@ func IndexHandler(basePath string, serverSettings *settings.Server, sessionManag
 		sessionManager: sessionManager,
 		clientStore:    clientStore,
 		scope:          scope,
-		tpl:            template.Must(template.New("index").Parse(indexTpl)),
+		tpl:            template.Must(template.New("index").Funcs(stringutil.TemplateFuncs).Parse(indexTpl)),
 		version:        version,
 	}
 }

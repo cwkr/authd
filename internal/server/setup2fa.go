@@ -90,7 +90,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if algorithm == "" {
-			algorithm = "sha256"
+			algorithm = "sha1"
 		}
 
 		if r.Method == http.MethodPost {
@@ -188,7 +188,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			imageURL = dataURL
 		}
 
-		if err := o.tpl.ExecuteTemplate(w, "2fa", map[string]any{
+		if err := o.tpl.ExecuteTemplate(w, "setup-2fa", map[string]any{
 			"base_path":                   o.basePath,
 			"qrcode":                      template.URL(imageURL),
 			"require_2fa":                 require2FA,
@@ -218,7 +218,7 @@ func Setup2FAHandler(sessionManager sessions.SessionManager, clientStore clients
 		clientStore:    clientStore,
 		presets:        presets,
 		otpauthStore:   otpauthStore,
-		tpl:            template.Must(template.New("2fa").Parse(setup2faTpl)),
+		tpl:            template.Must(template.New("setup-2fa").Funcs(stringutil.TemplateFuncs).Parse(setup2faTpl)),
 		basePath:       basePath,
 		version:        version,
 		issuer:         issuer,
