@@ -308,6 +308,8 @@ func main() {
 		if revocationStore, err = revocation.NewSqlStore(dbs, serverSettings.RevocationStore); err != nil {
 			log.Fatalf("!!! %s", err)
 		}
+	} else {
+		revocationStore = revocation.NewNoopStore()
 	}
 
 	if serverSettings.OtpauthStore != nil {
