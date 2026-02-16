@@ -1,4 +1,4 @@
-FROM golang:1.24-bookworm AS build
+FROM golang:1.25 AS build
 
 ARG VERSION
 
@@ -6,10 +6,10 @@ WORKDIR /src
 
 COPY ./ ./
 
-RUN cd cmd/auth-server && go build -ldflags "-X main.version=${VERSION}"
+RUN cd cmd/auth-server && CGO_ENABLED=0 GOAMD64=v2 go build -ldflags "-X main.version=${VERSION}"
 
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 WORKDIR /
 
