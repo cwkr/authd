@@ -24,6 +24,7 @@ import (
 	"github.com/cwkr/authd/internal/server"
 	sessions2 "github.com/cwkr/authd/internal/server/sessions"
 	"github.com/cwkr/authd/internal/sqlutil"
+	"github.com/cwkr/authd/mail"
 	"github.com/cwkr/authd/middleware"
 	"github.com/cwkr/authd/settings"
 	"github.com/gorilla/mux"
@@ -146,6 +147,33 @@ func main() {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.Setup2FATemplate, "@"))
 		log.Printf("Loading setup 2FA template from %s", filename)
 		err = server.LoadSetup2FATemplate(filename)
+		if err != nil {
+			log.Fatalf("!!! %s", err)
+		}
+	}
+
+	if serverSettings.ResetPasswordTemplate != "" {
+		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.ResetPasswordTemplate, "@"))
+		log.Printf("Loading password reset template from %s", filename)
+		err = server.LoadResetPasswdTemplate(filename)
+		if err != nil {
+			log.Fatalf("!!! %s", err)
+		}
+	}
+
+	if serverSettings.ChangePasswordTemplate != "" {
+		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.ChangePasswordTemplate, "@"))
+		log.Printf("Loading change password template from %s", filename)
+		err = server.LoadChangePasswdTemplate(filename)
+		if err != nil {
+			log.Fatalf("!!! %s", err)
+		}
+	}
+
+	if serverSettings.PasswordResetMailTemplate != "" {
+		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.PasswordResetMailTemplate, "@"))
+		log.Printf("Loading password reset mail template from %s", filename)
+		err = server.LoadPasswordResetMailTemplate(filename)
 		if err != nil {
 			log.Fatalf("!!! %s", err)
 		}
@@ -324,6 +352,18 @@ func main() {
 		otpauthStore = otpauth.NewInMemoryStore(users)
 	}
 
+	var mailer mail.Mailer
+
+	if strings.TrimSpace(serverSettings.Mail.ServerURI) != "" {
+		if m, err := mail.NewMailer(serverSettings.Mail); err != nil {
+			log.Fatalf("!!! %s", err)
+		} else {
+			mailer = m
+		}
+	}
+
+	var passwordResetEnabled = mailer != nil && !peopleStore.ReadOnly()
+
 	var router = mux.NewRouter()
 
 	router.NotFoundHandler = htmlutil.NotFoundHandler(basePath)
@@ -339,7 +379,7 @@ func main() {
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/favicon-32x32.png", server.Favicon32x32Handler()).
 		Methods(http.MethodGet)
-	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, presets, serverSettings.Issuer)).
+	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, presets, serverSettings.Issuer, passwordResetEnabled)).
 		Methods(http.MethodGet, http.MethodPost)
 	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
 	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
@@ -360,6 +400,13 @@ func main() {
 
 	router.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, presets, otpauthStore, basePath, version, serverSettings.Issuer)).
 		Methods(http.MethodGet, http.MethodPost)
+
+	if passwordResetEnabled {
+		router.Handle(basePath+"/resetpasswd", server.ResetPasswdHandler(peopleStore, clientStore, mailer, tokenCreator, serverSettings.Issuer, basePath, version)).
+			Methods(http.MethodGet, http.MethodPost)
+		router.Handle(basePath+"/chpasswd/{token}", server.ChangePasswdHandler(peopleStore, tokenCreator, revocationStore, serverSettings.Issuer, basePath, version)).
+			Methods(http.MethodGet, http.MethodPost)
+	}
 
 	if serverSettings.EnableTokenRevocation {
 		router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore)).

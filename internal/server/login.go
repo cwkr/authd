@@ -35,14 +35,15 @@ func LoadLoginTemplate(filename string) error {
 }
 
 type loginHandler struct {
-	basePath       string
-	sessionManager sessions.SessionManager
-	peopleStore    people.Store
-	clientStore    clients.Store
-	otpauthStore   otpauth.Store
-	issuer         string
-	presets        presets.Presets
-	tpl            *template.Template
+	basePath             string
+	sessionManager       sessions.SessionManager
+	peopleStore          people.Store
+	clientStore          clients.Store
+	otpauthStore         otpauth.Store
+	issuer               string
+	presets              presets.Presets
+	passwordResetEnabled bool
+	tpl                  *template.Template
 }
 
 func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -169,30 +170,32 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	var err = j.tpl.ExecuteTemplate(w, "login", map[string]any{
-		"base_path":          j.basePath,
-		"issuer":             strings.TrimRight(j.issuer, "/"),
-		"query":              template.HTML("?" + r.URL.RawQuery),
-		"message":            message,
-		"client_id":          clientID,
-		"login_query_base64": loginQueryBase64,
-		"user_id":            userID,
-		"password_empty":     password == "",
-		"code_required":      sessionActive && !sessionVerified,
+		"base_path":              j.basePath,
+		"issuer":                 strings.TrimRight(j.issuer, "/"),
+		"query":                  template.HTML("?" + r.URL.RawQuery),
+		"message":                message,
+		"client_id":              clientID,
+		"login_query_base64":     loginQueryBase64,
+		"user_id":                userID,
+		"password_empty":         password == "",
+		"code_required":          sessionActive && !sessionVerified,
+		"password_reset_enabled": j.passwordResetEnabled,
 	})
 	if err != nil {
 		htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func LoginHandler(basePath string, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, presets presets.Presets, issuer string) http.Handler {
+func LoginHandler(basePath string, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, presets presets.Presets, issuer string, passwordResetEnabled bool) http.Handler {
 	return &loginHandler{
-		basePath:       basePath,
-		sessionManager: sessionManager,
-		peopleStore:    peopleStore,
-		clientStore:    clientStore,
-		otpauthStore:   otpauthStore,
-		presets:        presets,
-		issuer:         issuer,
-		tpl:            template.Must(template.New("login").Funcs(stringutil.TemplateFuncs).Parse(loginTpl)),
+		basePath:             basePath,
+		sessionManager:       sessionManager,
+		peopleStore:          peopleStore,
+		clientStore:          clientStore,
+		otpauthStore:         otpauthStore,
+		presets:              presets,
+		issuer:               issuer,
+		passwordResetEnabled: passwordResetEnabled,
+		tpl:                  template.Must(template.New("login").Funcs(stringutil.TemplateFuncs).Parse(loginTpl)),
 	}
 }

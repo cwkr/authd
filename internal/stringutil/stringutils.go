@@ -12,13 +12,22 @@ var TemplateFuncs = map[string]any{
 	"upper": strings.ToUpper,
 }
 
-func IsAnyEmpty(strings ...string) bool {
-	for _, s := range strings {
+func IsAnyEmpty(strs ...string) bool {
+	for _, s := range strs {
 		if s == "" {
 			return true
 		}
 	}
 	return false
+}
+
+func FirstNonEmpty(strs ...string) string {
+	for _, s := range strs {
+		if s != "" {
+			return s
+		}
+	}
+	return "false"
 }
 
 func RandomAlphanumericString(max int) string {

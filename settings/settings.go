@@ -19,6 +19,7 @@ import (
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/keyset"
+	"github.com/cwkr/authd/mail"
 )
 
 type CustomPeopleAPI struct {
@@ -28,34 +29,38 @@ type CustomPeopleAPI struct {
 }
 
 type Server struct {
-	Issuer                  string                            `json:"issuer"`
-	Port                    int                               `json:"port"`
-	Title                   string                            `json:"title,omitempty"`
-	Users                   map[string]people.AuthenticPerson `json:"users,omitempty"`
-	Key                     string                            `json:"key"`
-	AdditionalKeys          []string                          `json:"additional_keys,omitempty"`
-	Clients                 map[string]clients.Client         `json:"clients,omitempty"`
-	ClientStore             *clients.StoreSettings            `json:"client_store,omitempty"`
-	ExtraScope              string                            `json:"extra_scope,omitempty"`
-	Presets                 presets.Presets                   `json:"presets,omitempty"`
-	CookieSecret            string                            `json:"cookie_secret"`
-	UserinfoExtraClaims     map[string]string                 `json:"userinfo_extra_claims,omitempty"`
-	PeopleStore             *people.StoreSettings             `json:"people_store,omitempty"`
-	OtpauthStore            *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
-	DisableAPI              bool                              `json:"disable_api,omitempty"`
-	PeopleAPICustomVersions map[string]CustomPeopleAPI        `json:"people_api_custom_versions,omitempty"`
-	PeopleAPIRequireAuthN   bool                              `json:"people_api_require_authn,omitempty"`
-	LoginTemplate           string                            `json:"login_template,omitempty"`
-	LogoutTemplate          string                            `json:"logout_template,omitempty"`
-	Setup2FATemplate        string                            `json:"setup_2fa_template,omitempty"`
-	RevocationStore         *revocation.StoreSettings         `json:"revocation_store,omitempty"`
-	EnableTokenRevocation   bool                              `json:"enable_token_revocation,omitempty"`
-	KeysTTL                 int                               `json:"keys_ttl,omitempty"`
-	Roles                   oauth2.RoleMappings               `json:"roles,omitempty"`
-	AdministratorRole       string                            `json:"administrator_role,omitempty"`
-	rsaSigningKey           *rsa.PrivateKey
-	rsaSigningKeyID         string
-	keySetProvider          keyset.Provider
+	Issuer                    string                            `json:"issuer"`
+	Port                      int                               `json:"port"`
+	Title                     string                            `json:"title,omitempty"`
+	Users                     map[string]people.AuthenticPerson `json:"users,omitempty"`
+	Key                       string                            `json:"key"`
+	AdditionalKeys            []string                          `json:"additional_keys,omitempty"`
+	Clients                   map[string]clients.Client         `json:"clients,omitempty"`
+	ClientStore               *clients.StoreSettings            `json:"client_store,omitempty"`
+	ExtraScope                string                            `json:"extra_scope,omitempty"`
+	Presets                   presets.Presets                   `json:"presets,omitempty"`
+	CookieSecret              string                            `json:"cookie_secret"`
+	UserinfoExtraClaims       map[string]string                 `json:"userinfo_extra_claims,omitempty"`
+	PeopleStore               *people.StoreSettings             `json:"people_store,omitempty"`
+	OtpauthStore              *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
+	DisableAPI                bool                              `json:"disable_api,omitempty"`
+	PeopleAPICustomVersions   map[string]CustomPeopleAPI        `json:"people_api_custom_versions,omitempty"`
+	PeopleAPIRequireAuthN     bool                              `json:"people_api_require_authn,omitempty"`
+	LoginTemplate             string                            `json:"login_template,omitempty"`
+	LogoutTemplate            string                            `json:"logout_template,omitempty"`
+	Setup2FATemplate          string                            `json:"setup_2fa_template,omitempty"`
+	ResetPasswordTemplate     string                            `json:"reset_password_template,omitempty"`
+	ChangePasswordTemplate    string                            `json:"change_password_template,omitempty"`
+	PasswordResetMailTemplate string                            `json:"password_reset_mail_template,omitempty"`
+	RevocationStore           *revocation.StoreSettings         `json:"revocation_store,omitempty"`
+	EnableTokenRevocation     bool                              `json:"enable_token_revocation,omitempty"`
+	KeysTTL                   int                               `json:"keys_ttl,omitempty"`
+	Roles                     oauth2.RoleMappings               `json:"roles,omitempty"`
+	AdministratorRole         string                            `json:"administrator_role,omitempty"`
+	Mail                      mail.MailSettings                 `json:"mail,omitempty"`
+	rsaSigningKey             *rsa.PrivateKey
+	rsaSigningKeyID           string
+	keySetProvider            keyset.Provider
 }
 
 func NewDefault(port int) *Server {

@@ -132,6 +132,26 @@ Client column names are mapped by name:
 }
 ```
 
+#### PostgreSQL as revocation store
+
+Client column names are mapped by name:
+
+| column name                     |
+|---------------------------------|
+| `jti`                           |
+| `rvt`                           |
+| `exp`                           |
+
+```jsonc
+{
+  "revocation_store": {
+    "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
+    "query": "SELECT rvt, exp FROM token_revocation_list WHERE jti = $1 and exp >= current_timestamp",
+    "insert": "INSERT INTO token_revocation_list (jti, exp) VALUES ($1, $2) ON CONFLICT (jti) DO NOTHING"
+  },
+}
+```
+
 #### Oracle Database as people store
 
 Client column names are mapped case-sensitive by name:

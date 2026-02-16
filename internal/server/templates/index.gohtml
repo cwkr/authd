@@ -69,15 +69,17 @@
     <input type="hidden" id="code_challenge_method" name="code_challenge_method" value="S256" disabled>
     <input type="hidden" id="scope" name="scope">
     <label for="response_type">Flow</label>
-    <select id="response_type" name="response_type">
-        <option value="token">Implicit (access token only)</option>
-        <option value="code">Authorization Code (access token with refresh token and id token depending on scope)</option>
-        <option value="client_credentials">Client Credentials (access token only)</option>
-        <option value="password">Password (access token only)</option>
+    <select id="response_type" name="response_type" required>
+        <option value="">&mdash;</option>
+        <option value="token">Implicit</option>
+        <option value="code">Authorization Code</option>
+        <option value="client_credentials">Client Credentials</option>
+        <option value="password">Password</option>
+        <option value="refresh_token">Refresh Token</option>
     </select>
     <label for="client_id">Client</label>
     <select id="client_id" name="client_id" required>
-        <option value="">---</option>
+        <option value="">&mdash;</option>
     {{- range .client_ids }}
         <option value="{{ . }}">{{ . }}</option>
     {{- end }}
@@ -88,6 +90,8 @@
     <input type="text" id="username" required disabled>
     <label for="password">Password</label>
     <input type="password" id="password" required disabled>
+    <label for="txa_token">Token</label>
+    <textarea id="txa_token" required disabled></textarea>
     <details>
         <summary>Scope</summary>
         {{- range .scopes }}

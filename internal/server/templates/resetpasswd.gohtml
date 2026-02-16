@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reset Password</title>
+    <link rel="stylesheet" href="{{ .base_path }}/style.css">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-16x16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-32x32.png" sizes="32x32">
+</head>
+<body>
+<h1>Reset Password</h1>
+
+{{ with .error_message }}
+    <div class="alert error">{{ . }}</div>
+{{ end }}
+{{ with .success_message }}
+    <div class="alert success">{{ . }}</div>
+{{ end }}
+
+<form method="post">
+    <input type="text" name="user_id" placeholder="Username"{{ with .user_id }} value="{{ . }}" {{ end }} required>
+    <button type="submit" style="margin-top: 1em">Request Password Reset</button>
+</form>
+
+<div style="text-align: right"><small>{{ .version }}</small></div>
+</body>
+</html>

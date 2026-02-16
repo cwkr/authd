@@ -22,10 +22,11 @@ const (
 	GrantTypeRefreshToken      = "refresh_token"
 	GrantTypePassword          = "password"
 
-	TokenTypeCode         = "code"
-	TokenTypeRefreshToken = "refresh_token"
-	ResponseTypeCode      = "code"
-	ResponseTypeToken     = "token"
+	TokenTypeCode          = "code"
+	TokenTypeRefresh       = "refresh"
+	TokenTypePasswordReset = "passwd"
+	ResponseTypeCode       = "code"
+	ResponseTypeToken      = "token"
 )
 
 var (
@@ -39,7 +40,7 @@ type User struct {
 }
 
 type VerifiedClaims struct {
-	UserID    string           `json:"user_id"`
+	UserID    string           `json:"uid"`
 	ClientID  string           `json:"cid"`
 	TokenID   string           `json:"jti"`
 	Type      string           `json:"typ"`
@@ -55,10 +56,11 @@ func NewTokenID(timestamp time.Time) string {
 }
 
 type TokenCreator interface {
-	GenerateAccessToken(user User, algorithm, subject, clientID, scope string) (string, error)
-	GenerateIDToken(user User, algorithm, clientID, scope, accessTokenHash, nonce string) (string, error)
-	GenerateAuthCode(algorithm, userID, clientID, scope, challenge, nonce string) (string, error)
-	GenerateRefreshToken(algorithm, userID, clientID, scope, nonce string) (string, error)
+	GenerateAccessToken(user User, presetID, subject, clientID, scope string) (string, error)
+	GenerateIDToken(user User, presetID, clientID, scope, accessTokenHash, nonce string) (string, error)
+	GenerateAuthCode(presetID, userID, clientID, scope, challenge, nonce string) (string, error)
+	GeneratePasswordResetToken(presetID, userID, clientID string) (string, error)
+	GenerateRefreshToken(presetID, userID, clientID, scope, nonce string) (string, error)
 	Verify(rawToken, tokenType string) (*VerifiedClaims, error)
 	Issuer() string
 }
@@ -174,7 +176,6 @@ func (t tokenCreator) GenerateAuthCode(presetID, userID, clientID, scope, challe
 
 	var claims = map[string]any{
 		ClaimIssuer:        t.issuer,
-		ClaimSubject:       NewTokenID(now),
 		ClaimType:          TokenTypeCode,
 		ClaimClientID:      clientID,
 		ClaimUserID:        userID,
@@ -196,20 +197,35 @@ func (t tokenCreator) GenerateAuthCode(presetID, userID, clientID, scope, challe
 	return t.SignClaims(presetID, claims)
 }
 
-func (t tokenCreator) GenerateRefreshToken(presetID, userID, clientID, scope, nonce string) (string, error) {
+func (t tokenCreator) GeneratePasswordResetToken(presetID, userID, clientID string) (string, error) {
 	var now = time.Now()
-	var tokenID = NewTokenID(now)
 
 	var claims = map[string]any{
 		ClaimIssuer:        t.issuer,
-		ClaimSubject:       tokenID,
-		ClaimType:          TokenTypeRefreshToken,
+		ClaimType:          TokenTypePasswordReset,
+		ClaimClientID:      clientID,
+		ClaimUserID:        userID,
+		ClaimIssuedAtTime:  now.Unix(),
+		ClaimNotBeforeTime: now.Unix(),
+		ClaimExpiryTime:    now.Unix() + 1_800,
+		ClaimTokenID:       NewTokenID(now),
+	}
+
+	return t.SignClaims(presetID, claims)
+}
+
+func (t tokenCreator) GenerateRefreshToken(presetID, userID, clientID, scope, nonce string) (string, error) {
+	var now = time.Now()
+
+	var claims = map[string]any{
+		ClaimIssuer:        t.issuer,
+		ClaimType:          TokenTypeRefresh,
 		ClaimClientID:      clientID,
 		ClaimUserID:        userID,
 		ClaimIssuedAtTime:  now.Unix(),
 		ClaimNotBeforeTime: now.Unix(),
 		ClaimExpiryTime:    now.Unix() + int64(t.presets[strings.ToLower(presetID)].RefreshTokenTTL),
-		ClaimTokenID:       tokenID,
+		ClaimTokenID:       NewTokenID(now),
 	}
 
 	if scope != "" {

@@ -12,7 +12,7 @@
 <h1>Two-factor authentication (2FA)</h1>
 
 {{ with .error_message }}
-    <div style="color: salmon; margin-bottom: 2em;">{{ . }}</div>
+    <div class="alert error">{{ . }}</div>
 {{ end }}
 
 {{ if .generated_recovery_code }}

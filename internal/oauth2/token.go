@@ -160,7 +160,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Error(w, ErrorInvalidRequest, "client_id and refresh_token parameters are required", http.StatusBadRequest)
 			return
 		}
-		var refreshClaims, refreshTokenErr = t.tokenService.Verify(refreshToken, TokenTypeRefreshToken)
+		var refreshClaims, refreshTokenErr = t.tokenService.Verify(refreshToken, TokenTypeRefresh)
 		if refreshTokenErr == nil {
 			revokedToken, _ := t.revocationStore.Lookup(refreshClaims.TokenID)
 			if revokedToken != nil {

@@ -1,3 +1,11 @@
+class HttpError extends Error {
+    constructor(message, statusCode, statusText) {
+        super(message);
+        this.statusCode = statusCode;
+        this.statusText = statusText;
+    }
+}
+
 function decodeBase64(base64) {
     const text = atob(base64);
     const length = text.length;
@@ -32,28 +40,35 @@ function updateFields(responseType) {
         document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #scope").forEach(input => {
             input.disabled = false;
         });
-        document.querySelectorAll("#client_secret, #username, #password").forEach(input => {
+        document.querySelectorAll("#client_secret, #username, #password, #txa_token").forEach(input => {
             input.disabled = true;
         });
     } else if (responseType === "token") {
-        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #client_secret, #username, #password").forEach(input => {
+        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #client_secret, #username, #password, #txa_token").forEach(input => {
             input.disabled = true;
         });
         document.querySelectorAll("#scope").forEach(input => {
             input.disabled = false;
         });
     } else if (responseType === "client_credentials") {
-        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #username, #password").forEach(input => {
+        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #username, #password, #txa_token").forEach(input => {
             input.disabled = true;
         });
         document.querySelectorAll("#scope, #client_secret").forEach(input => {
             input.disabled = false;
         });
     } else if (responseType === "password") {
-        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #username, #password").forEach(input => {
+        document.querySelectorAll("#code_challenge, #code_challenge_method, #nonce, #txa_token").forEach(input => {
             input.disabled = true;
         });
         document.querySelectorAll("#username, #password, #scope, #client_secret").forEach(input => {
+            input.disabled = false;
+        });
+    } else if (responseType === "refresh_token") {
+        document.querySelectorAll("#code_challenge, #code_challenge_method, #scope, #nonce, #username, #password").forEach(input => {
+            input.disabled = true;
+        });
+        document.querySelectorAll("#client_secret, #txa_token").forEach(input => {
             input.disabled = false;
         });
     }
@@ -68,7 +83,7 @@ function getToken(params) {
     fetch("token", {method: "POST", body: postParams})
         .then(async resp => {
             if (!resp.ok) {
-                throw new Error(await resp.text());
+                throw new HttpError(await resp.text(), resp.status, resp.statusText);
             }
             return resp.json();
         })
@@ -77,14 +92,28 @@ function getToken(params) {
                 document.getElementById("access_token_output").textContent = data.access_token;
                 document.getElementById("access_token_json").textContent = JSON.stringify(decodeJwt(data.access_token), null, 2);
                 document.getElementById("access_token_panel").style.display = 'block';
+            }
+            if (data.refresh_token) {
+                document.getElementById("refresh_token_output").textContent = data.refresh_token;
+                document.getElementById("refresh_token_panel").style.display = 'block';
+            } else {
+                document.getElementById("refresh_token_output").textContent = '';
                 document.getElementById("refresh_token_panel").style.display = 'none';
+            }
+            if (data.id_token) {
+                document.getElementById("id_token_output").textContent = data.id_token;
+                document.getElementById("id_token_json").textContent = JSON.stringify(decodeJwt(data.id_token), null, 2);
+                document.getElementById("id_token_panel").style.display = 'block';
+            } else {
+                document.getElementById("id_token_output").textContent = '';
+                document.getElementById("id_token_json").textContent = '';
                 document.getElementById("id_token_panel").style.display = 'none';
             }
         })
         .catch(error => {
             console.error(error);
-            document.getElementById("access_token_output").textContent = error.message;
-            document.getElementById("access_token_json").textContent = '';
+            document.getElementById("access_token_output").textContent = `${error.statusCode} ${error.statusText}`;
+            document.getElementById("access_token_json").textContent = error.message;
             document.getElementById("access_token_panel").style.display = 'block';
             document.getElementById("refresh_token_panel").style.display = 'none';
             document.getElementById("id_token_panel").style.display = 'none';
@@ -113,6 +142,14 @@ function onRequestFormSubmit(event) {
             "username": document.getElementById("username").value,
             "password": document.getElementById("password").value,
             "scope": document.getElementById("scope").value
+        });
+    } else if (responseType === 'refresh_token') {
+        event.preventDefault();
+        getToken({
+            "grant_type": "refresh_token",
+            "client_id": document.getElementById("client_id").value,
+            "client_secret": document.getElementById("client_secret").value,
+            "refresh_token": document.getElementById("txa_token").value
         });
     }
 
@@ -159,43 +196,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById("access_token_json").textContent = JSON.stringify(decodeJwt(accessToken), null, 2);
         document.getElementById("access_token_panel").style.display = 'block';
     } else if (urlParams.has("code") === true) {
-        const postParams = new URLSearchParams({
+        getToken({
             "grant_type": "authorization_code",
             "code": urlParams.get("code"),
             "client_id": sessionStorage.getItem('client_id'),
             "code_verifier": sessionStorage.getItem('code_verifier')
         });
-        fetch("token", {method: "POST", body: postParams})
-            .then(async resp => {
-                if (!resp.ok) {
-                    throw new Error(await resp.text());
-                }
-                return resp.json();
-            })
-            .then(data => {
-                if (data.access_token) {
-                    document.getElementById("access_token_output").textContent = data.access_token;
-                    document.getElementById("access_token_json").textContent = JSON.stringify(decodeJwt(data.access_token), null, 2);
-                    document.getElementById("access_token_panel").style.display = 'block';
-                }
-                if (data.refresh_token) {
-                    document.getElementById("refresh_token_output").textContent = data.refresh_token;
-                    document.getElementById("refresh_token_panel").style.display = 'block';
-                }
-                if (data.id_token) {
-                    document.getElementById("id_token_output").textContent = data.id_token;
-                    document.getElementById("id_token_json").textContent = JSON.stringify(decodeJwt(data.id_token), null, 2);
-                    document.getElementById("id_token_panel").style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error(error);
-                document.getElementById("access_token_output").textContent = error.message;
-                document.getElementById("access_token_json").textContent = '';
-                document.getElementById("access_token_panel").style.display = 'block';
-                document.getElementById("refresh_token_panel").style.display = 'none';
-                document.getElementById("id_token_json").textContent = '';
-                document.getElementById("id_token_panel").style.display = 'none';
-            });
     }
 });

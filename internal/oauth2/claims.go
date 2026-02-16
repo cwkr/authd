@@ -11,7 +11,7 @@ const (
 	ClaimIssuer          = "iss"
 	ClaimIssuedAtTime    = "iat"
 	ClaimNotBeforeTime   = "nbf"
-	ClaimUserID          = "user_id"
+	ClaimUserID          = "uid"
 	ClaimScope           = "scope"
 	ClaimSubject         = "sub"
 	ClaimType            = "typ"

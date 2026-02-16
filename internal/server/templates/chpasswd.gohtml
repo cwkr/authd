@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Change Password</title>
+    <link rel="stylesheet" href="{{ .base_path }}/style.css">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-16x16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="{{ .base_path }}/favicon-32x32.png" sizes="32x32">
+</head>
+<body>
+<h1>Change Password</h1>
+
+{{ with .error_message }}
+    <div class="alert error">{{ . }}</div>
+{{ end }}
+{{ with .success_message }}
+    <div class="alert success">{{ . }}</div>
+{{ end }}
+
+{{ if and (not .expired) (not .success_message) }}
+<form method="post">
+    <label for="uid">Username</label>
+    <input type="text" id="uid" name="user_id" value="{{ .user_id }}" disabled>
+    <label for="pwd1">Password</label>
+    <input type="password" id="pwd1" name="password" required>
+    <label for="pwd2">Confirm Password</label>
+    <input type="password" id="pwd2" name="confirm_password" required>
+    <button type="submit" style="margin-top: 1em">Change Password</button>
+</form>
+{{ end }}
+
+<div style="text-align: right"><small>{{ .version }}</small></div>
+</body>
+</html>
