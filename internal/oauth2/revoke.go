@@ -1,6 +1,7 @@
 package oauth2
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -46,13 +47,24 @@ func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if clientSecret != "" {
 		if _, err := j.clientStore.Authenticate(clientID, clientSecret); err != nil {
-			Error(w, ErrorUnauthorizedClient, err.Error(), http.StatusUnauthorized)
+			if errors.Is(err, clients.ErrClientSecretMismatch) || errors.Is(err, clients.ErrClientNotFound) {
+				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
+			} else if errors.Is(err, clients.ErrClientNoSecret) {
+				Error(w, ErrorInvalidClient, err.Error(), http.StatusForbidden)
+			} else if errors.Is(err, clients.ErrClientSecretRequired) {
+				Error(w, ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+			} else {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 	} else {
 		if _, err := j.clientStore.Lookup(clientID); err != nil {
-			Error(w, ErrorUnauthorizedClient, err.Error(), http.StatusUnauthorized)
-			return
+			if errors.Is(err, clients.ErrClientNotFound) {
+				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
+			} else {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			}
 		}
 	}
 

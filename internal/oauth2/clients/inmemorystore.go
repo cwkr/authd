@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/cwkr/authd/internal/maputil"
@@ -23,7 +24,7 @@ func (i inMemoryStore) compareSecret(client *Client, clientSecret string) (*Clie
 	// bcrypt hash or plaintext
 	if strings.HasPrefix(client.SecretHash, "$2") {
 		if err := bcrypt.CompareHashAndPassword([]byte(client.SecretHash), []byte(clientSecret)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", ErrClientSecretMismatch, err)
 		}
 	} else if clientSecret != client.SecretHash {
 		return nil, ErrClientSecretMismatch

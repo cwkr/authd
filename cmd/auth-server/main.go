@@ -33,7 +33,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var version = "v0.8.x"
+var version = "v0.9.x"
 
 func main() {
 	var (

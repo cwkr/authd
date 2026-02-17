@@ -2,8 +2,9 @@ package oauth2
 
 import (
 	"encoding/json"
-	"github.com/cwkr/authd/internal/httputil"
 	"net/http"
+
+	"github.com/cwkr/authd/internal/httputil"
 )
 
 const (
@@ -26,8 +27,6 @@ const (
 	// ErrorRedirectURIMismatch - The redirect URI is invalid for the
 	// requested client id
 	ErrorRedirectURIMismatch = "redirect_uri_mismatch"
-
-	ErrorUnauthorizedClient = "unauthorized_client"
 
 	// ErrorUnsupportedGrantType – If a grant type is requested that the
 	// authorization server doesn't recognize, use this code. Note that

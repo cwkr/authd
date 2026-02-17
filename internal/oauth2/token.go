@@ -62,14 +62,28 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var client clients.Client
 	if clientSecret != "" || grantType == GrantTypeClientCredentials || grantType == GrantTypePassword {
 		if c, err := t.clientStore.Authenticate(clientID, clientSecret); err != nil {
-			Error(w, ErrorUnauthorizedClient, err.Error(), http.StatusUnauthorized)
+			log.Printf("!!! %s", err)
+			if errors.Is(err, clients.ErrClientSecretMismatch) || errors.Is(err, clients.ErrClientNotFound) {
+				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
+			} else if errors.Is(err, clients.ErrClientSecretRequired) {
+				Error(w, ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+			} else if errors.Is(err, clients.ErrClientNoSecret) {
+				Error(w, ErrorInvalidClient, err.Error(), http.StatusForbidden)
+			} else {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		} else {
 			client = *c
 		}
 	} else {
 		if c, err := t.clientStore.Lookup(clientID); err != nil {
-			Error(w, ErrorUnauthorizedClient, err.Error(), http.StatusUnauthorized)
+			log.Printf("!!! %s", err)
+			if errors.Is(err, clients.ErrClientNotFound) {
+				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
+			} else {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		} else {
 			client = *c

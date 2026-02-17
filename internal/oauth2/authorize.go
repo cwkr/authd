@@ -64,7 +64,8 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var client clients.Client
 	if c, err := a.clientStore.Lookup(clientID); err != nil {
-		Error(w, ErrorUnauthorizedClient, ErrorInvalidClient, http.StatusForbidden)
+		log.Printf("!!! %s", err)
+		htmlutil.Error(w, a.basePath, ErrorInvalidClient, http.StatusUnauthorized)
 		return
 	} else {
 		if responseType == ResponseTypeToken && client.DisableImplicit {
