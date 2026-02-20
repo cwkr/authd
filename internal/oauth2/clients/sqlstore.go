@@ -19,9 +19,9 @@ type sqlClient interface {
 
 type postgresClient struct {
 	SecretHash                 sql.NullString `db:"secret_hash"`
-	PresetID                   sql.NullString `db:"preset"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
+	Require2FA                 sql.NullBool   `db:"require_2fa"`
 	RedirectURIs               pq.StringArray `db:"redirect_uris"`
 	Audience                   pq.StringArray `db:"audience"`
 }
@@ -29,9 +29,9 @@ type postgresClient struct {
 func (p postgresClient) Client() *Client {
 	return &Client{
 		SecretHash:                 p.SecretHash.String,
-		PresetID:                   p.PresetID.String,
 		DisableImplicit:            p.DisableImplicit.Bool,
 		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
+		Require2FA:                 p.Require2FA.Bool,
 		RedirectURIs:               p.RedirectURIs,
 		Audience:                   p.Audience,
 	}
@@ -39,9 +39,9 @@ func (p postgresClient) Client() *Client {
 
 type genericClient struct {
 	SecretHash                 sql.NullString `db:"secret_hash"`
-	PresetID                   sql.NullString `db:"preset"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
+	Require2FA                 sql.NullBool   `db:"require_2fa"`
 	RedirectURIs               sql.NullString `db:"redirect_uris"`
 	Audience                   sql.NullString `db:"audience"`
 }
@@ -49,9 +49,9 @@ type genericClient struct {
 func (p genericClient) Client() *Client {
 	return &Client{
 		SecretHash:                 p.SecretHash.String,
-		PresetID:                   p.PresetID.String,
 		DisableImplicit:            p.DisableImplicit.Bool,
 		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
+		Require2FA:                 p.Require2FA.Bool,
 		RedirectURIs:               strings.Split(p.RedirectURIs.String, ","),
 		Audience:                   strings.Split(p.Audience.String, ","),
 	}

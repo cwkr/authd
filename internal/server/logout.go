@@ -2,6 +2,7 @@ package server
 
 import (
 	_ "embed"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -57,17 +58,16 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if clientID == "" {
-		htmlutil.Error(w, l.basePath, "client_id or id_token_hint parameters are required", http.StatusBadRequest)
-		return
-	}
-
 	var client clients.Client
-	if c, err := l.clientStore.Lookup(clientID); err != nil {
-		htmlutil.Error(w, l.basePath, "invalid_client", http.StatusForbidden)
-		return
-	} else {
-		client = *c
+	if clientID != "" {
+		if c, err := l.clientStore.Lookup(clientID); err != nil {
+			if !errors.Is(err, clients.ErrClientNotFound) {
+				htmlutil.Error(w, l.basePath, "invalid_client", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			client = *c
+		}
 	}
 
 	if redirectURI != "" && !strings.HasPrefix(redirectURI, strings.TrimRight(l.serverSettings.Issuer, "/")) {

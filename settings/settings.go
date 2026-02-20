@@ -13,7 +13,6 @@ import (
 
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
@@ -37,10 +36,14 @@ type Server struct {
 	AdditionalKeys            []string                          `json:"additional_keys,omitempty"`
 	Clients                   map[string]clients.Client         `json:"clients,omitempty"`
 	ClientStore               *clients.StoreSettings            `json:"client_store,omitempty"`
-	ExtraScope                string                            `json:"extra_scope,omitempty"`
-	Presets                   presets.Presets                   `json:"presets,omitempty"`
+	CustomScope               string                            `json:"custom_scope,omitempty"`
+	Defaults                  oauth2.TokenSettings              `json:"defaults,omitempty"`
+	CustomAccessTokenClaims   map[string]string                 `json:"custom_access_token_claims,omitempty"`
+	CustomIDTokenClaims       map[string]string                 `json:"custom_id_token_claims,omitempty"`
 	CookieSecret              string                            `json:"cookie_secret"`
-	UserinfoExtraClaims       map[string]string                 `json:"userinfo_extra_claims,omitempty"`
+	SessionName               string                            `json:"session_name"`
+	SessionLifetime           int                               `json:"session_lifetime"`
+	CustomUserinfoClaims      map[string]string                 `json:"custom_userinfo_claims,omitempty"`
 	PeopleStore               *people.StoreSettings             `json:"people_store,omitempty"`
 	OTPAuthStore              *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
 	DisableAPI                bool                              `json:"disable_api,omitempty"`
@@ -54,7 +57,7 @@ type Server struct {
 	PasswordResetMailTemplate string                            `json:"password_reset_mail_template,omitempty"`
 	RevocationStore           *revocation.StoreSettings         `json:"revocation_store,omitempty"`
 	EnableTokenRevocation     bool                              `json:"enable_token_revocation,omitempty"`
-	KeysTTL                   int                               `json:"keys_ttl,omitempty"`
+	AdditionalKeysLifetime    int                               `json:"additional_keys_lifetime,omitempty"`
 	Roles                     oauth2.RoleMappings               `json:"roles,omitempty"`
 	AdministratorRole         string                            `json:"administrator_role,omitempty"`
 	Mail                      mail.MailSettings                 `json:"mail,omitempty"`
@@ -67,18 +70,17 @@ func NewDefault(port int) *Server {
 	return &Server{
 		Issuer: fmt.Sprintf("http://localhost:%d", port),
 		Port:   port,
-		Presets: map[string]presets.Preset{
-			"": {
-				SigningAlgorithm: "RS256",
-				AccessTokenTTL:   3_600,
-				RefreshTokenTTL:  28_800,
-				IDTokenTTL:       28_800,
-				SessionName:      "_auth",
-				SessionTTL:       28_800,
-			},
+		Defaults: oauth2.TokenSettings{
+			AccessTokenLifetime:  3_600,
+			AuthCodeLifetime:     300,
+			IDTokenLifetime:      28_800,
+			RefreshTokenLifetime: 28_800,
+			SigningAlgorithm:     "RS256",
 		},
-		CookieSecret: stringutil.RandomAlphanumericString(32),
-		KeysTTL:      900,
+		CookieSecret:           stringutil.RandomAlphanumericString(32),
+		SessionName:            "AUTHSESSION",
+		SessionLifetime:        28_800,
+		AdditionalKeysLifetime: 900,
 	}
 }
 
@@ -114,7 +116,7 @@ func (s *Server) LoadKeys(dir string) error {
 
 	var keys = append([]string{s.PublicKeyPEM(true)}, s.AdditionalKeys...)
 
-	s.keySetProvider = keyset.NewProvider(dir, keys, time.Duration(s.KeysTTL)*time.Second)
+	s.keySetProvider = keyset.NewProvider(dir, keys, time.Duration(s.AdditionalKeysLifetime)*time.Second)
 
 	return nil
 }

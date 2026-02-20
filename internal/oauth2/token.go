@@ -14,7 +14,6 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/pkce"
-	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
@@ -25,7 +24,6 @@ type tokenHandler struct {
 	peopleStore     people.Store
 	clientStore     clients.Store
 	revocationStore revocation.Store
-	presets         presets.Presets
 	scope           string
 }
 
@@ -48,6 +46,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		codeVerifier                      = strings.TrimSpace(r.PostFormValue("code_verifier"))
 		accessToken                       string
 		idToken                           string
+		accessTokenLifetime               int
 	)
 	// when not using basic auth load client_id and client_secret parameters
 	if !basicAuth {
@@ -123,7 +122,13 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: userID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, userID, clientID, IntersectScope(t.scope, scope))
+		if at, lt, err := t.tokenService.GenerateAccessToken(user, client, userID, clientID, IntersectScope(t.scope, scope)); err != nil {
+			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			accessToken = at
+			accessTokenLifetime = lt
+		}
 		timing.Stop("jwtgen")
 	case GrantTypeAuthorizationCode:
 		var codeClaims, authCodeErr = t.tokenService.Verify(code, TokenTypeCode)
@@ -160,13 +165,29 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: codeClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, codeClaims.UserID, clientID, codeClaims.Scope)
+		if at, lt, err := t.tokenService.GenerateAccessToken(user, client, codeClaims.UserID, clientID, codeClaims.Scope); err != nil {
+			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			accessToken = at
+			accessTokenLifetime = lt
+		}
 		if strings.Contains(codeClaims.Scope, "offline_access") {
-			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.PresetID, codeClaims.UserID, clientID, codeClaims.Scope, codeClaims.Nonce)
+			if rt, err := t.tokenService.GenerateRefreshToken(client, codeClaims.UserID, clientID, codeClaims.Scope, codeClaims.Nonce); err != nil {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				refreshToken = rt
+			}
 		}
 		if strings.Contains(codeClaims.Scope, "openid") {
 			var hash = sha256.Sum256([]byte(accessToken))
-			idToken, _ = t.tokenService.GenerateIDToken(user, client.PresetID, clientID, codeClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), codeClaims.Nonce)
+			if it, err := t.tokenService.GenerateIDToken(user, client, clientID, codeClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), codeClaims.Nonce); err != nil {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				idToken = it
+			}
 		}
 		timing.Stop("jwtgen")
 	case GrantTypeRefreshToken:
@@ -195,16 +216,32 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: refreshClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, refreshClaims.UserID, clientID, refreshClaims.Scope)
+		if at, lt, err := t.tokenService.GenerateAccessToken(user, client, refreshClaims.UserID, clientID, refreshClaims.Scope); err != nil {
+			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			accessToken = at
+			accessTokenLifetime = lt
+		}
 		if client.EnableRefreshTokenRotation && strings.Contains(refreshClaims.Scope, "offline_access") {
 			_ = t.revocationStore.Put(refreshClaims.TokenID, refreshClaims.Expiry.Time())
-			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.PresetID, refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce)
+			if rt, err := t.tokenService.GenerateRefreshToken(client, refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce); err != nil {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				refreshToken = rt
+			}
 		} else {
 			refreshToken = ""
 		}
 		if strings.Contains(refreshClaims.Scope, "openid") {
 			var hash = sha256.Sum256([]byte(accessToken))
-			idToken, _ = t.tokenService.GenerateIDToken(user, client.PresetID, clientID, refreshClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), refreshClaims.Nonce)
+			if it, err := t.tokenService.GenerateIDToken(user, client, clientID, refreshClaims.Scope, base64.RawURLEncoding.EncodeToString(hash[:16]), refreshClaims.Nonce); err != nil {
+				Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				idToken = it
+			}
 		}
 		timing.Stop("jwtgen")
 	case GrantTypeClientCredentials:
@@ -217,7 +254,13 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(User{}, client, client.PresetID, clientID, clientID, IntersectScope(t.scope, scope))
+		if at, lt, err := t.tokenService.GenerateAccessToken(User{}, client, clientID, clientID, IntersectScope(t.scope, scope)); err != nil {
+			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			accessToken = at
+			accessTokenLifetime = lt
+		}
 		timing.Stop("jwtgen")
 	default:
 		Error(w, ErrorUnsupportedGrantType, "only grant types 'authorization_code', 'client_credentials', 'password' and 'refresh_token' are supported", http.StatusBadRequest)
@@ -227,7 +270,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var bytes, err = json.Marshal(TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    t.presets[strings.ToLower(client.PresetID)].AccessTokenTTL,
+		ExpiresIn:    accessTokenLifetime,
 		RefreshToken: refreshToken,
 		IDToken:      idToken,
 	})
@@ -242,13 +285,12 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(bytes)
 }
 
-func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, revocationStore revocation.Store, presets presets.Presets, scope string) http.Handler {
+func TokenHandler(tokenService TokenCreator, peopleStore people.Store, clientStore clients.Store, revocationStore revocation.Store, scope string) http.Handler {
 	return &tokenHandler{
 		tokenService:    tokenService,
 		peopleStore:     peopleStore,
 		clientStore:     clientStore,
 		revocationStore: revocationStore,
-		presets:         presets,
 		scope:           scope,
 	}
 }

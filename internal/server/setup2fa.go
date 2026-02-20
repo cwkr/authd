@@ -15,7 +15,6 @@ import (
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/stringutil"
@@ -36,7 +35,6 @@ func LoadSetup2FATemplate(filename string) error {
 type setup2FAHandler struct {
 	sessionManager session.Manager
 	clientStore    clients.Store
-	presets        presets.Presets
 	otpauthStore   otpauth.Store
 	tpl            *template.Template
 	issuer         string
@@ -70,7 +68,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			errorMessage             string
 			keyWrapper               *otpauth.KeyWrapper
 			enabled                  bool
-			require2FA               = o.presets[strings.ToLower(client.PresetID)].Require2FA
+			require2FA               = client.Require2FA
 			generatedRecoveryCode    string
 			postSetupContinuationURI string
 		)
@@ -207,11 +205,10 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Setup2FAHandler(sessionManager session.Manager, clientStore clients.Store, presets presets.Presets, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
+func Setup2FAHandler(sessionManager session.Manager, clientStore clients.Store, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
 	return &setup2FAHandler{
 		sessionManager: sessionManager,
 		clientStore:    clientStore,
-		presets:        presets,
 		otpauthStore:   otpauthStore,
 		tpl:            template.Must(template.New("setup-2fa").Funcs(stringutil.TemplateFuncs).Parse(setup2faTpl)),
 		basePath:       basePath,

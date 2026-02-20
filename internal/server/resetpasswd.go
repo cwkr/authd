@@ -60,22 +60,8 @@ func (o *resetPasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		errorMessage   string
 		successMessage string
-		clientID       = strings.TrimSpace(r.FormValue("client_id"))
 		userID         = strings.TrimSpace(r.FormValue("user_id"))
-		client         clients.Client
 	)
-
-	if stringutil.IsAnyEmpty(clientID) {
-		htmlutil.Error(w, o.basePath, "client_id parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	if c, err := o.clientStore.Lookup(clientID); err != nil {
-		htmlutil.Error(w, o.basePath, "client not found", http.StatusForbidden)
-		return
-	} else {
-		client = *c
-	}
 
 	if r.Method == http.MethodPost {
 		userID = strings.TrimSpace(r.PostFormValue("user_id"))
@@ -85,7 +71,7 @@ func (o *resetPasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if person, err := o.peopleStore.Lookup(userID); err == nil {
 				if !o.peopleStore.ReadOnly() && person.Email != "" {
 					log.Printf("Sending mail with password reset link for user %s to %s", userID, person.Email)
-					if token, err := o.tokenCreator.GeneratePasswordResetToken(client.PresetID, userID, clientID); err == nil {
+					if token, err := o.tokenCreator.GeneratePasswordResetToken(userID); err == nil {
 						var msg strings.Builder
 						if err := o.mailTpl.ExecuteTemplate(&msg, "mail", map[string]any{
 							"link": template.URL(fmt.Sprintf("%s/chpasswd/%s", strings.TrimSuffix(o.issuer, "/"), token)),

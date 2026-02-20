@@ -15,7 +15,6 @@ import (
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server/session"
@@ -41,7 +40,6 @@ type loginHandler struct {
 	clientStore          clients.Store
 	otpauthStore         otpauth.Store
 	issuer               string
-	presets              presets.Presets
 	passwordResetEnabled bool
 	tpl                  *template.Template
 }
@@ -70,7 +68,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		require2FA       = j.presets[strings.ToLower(client.PresetID)].Require2FA
+		require2FA       = client.Require2FA
 		loginQueryBase64 = base64.RawURLEncoding.EncodeToString([]byte(r.URL.RawQuery))
 	)
 
@@ -186,14 +184,13 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func LoginHandler(basePath string, sessionManager session.Manager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, presets presets.Presets, issuer string, passwordResetEnabled bool) http.Handler {
+func LoginHandler(basePath string, sessionManager session.Manager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, issuer string, passwordResetEnabled bool) http.Handler {
 	return &loginHandler{
 		basePath:             basePath,
 		sessionManager:       sessionManager,
 		peopleStore:          peopleStore,
 		clientStore:          clientStore,
 		otpauthStore:         otpauthStore,
-		presets:              presets,
 		issuer:               issuer,
 		passwordResetEnabled: passwordResetEnabled,
 		tpl:                  template.Must(template.New("login").Funcs(stringutil.TemplateFuncs).Parse(loginTpl)),
