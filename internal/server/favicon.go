@@ -3,10 +3,11 @@ package server
 import (
 	_ "embed"
 	"fmt"
-	"github.com/cwkr/authd/internal/httputil"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/cwkr/authd/internal/httputil"
 )
 
 //go:embed assets/favicon.ico
@@ -21,7 +22,7 @@ var favicon32x32 []byte
 func FaviconHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL)
-		w.Header().Set("Content-Type", "image/vnd.microsoft.icon")
+		w.Header().Set("Content-Type", "image/x-icon")
 		w.Header().Set("Content-Length", fmt.Sprint(len(favicon)))
 		httputil.Cache(w, 120*time.Hour)
 		w.Write(favicon)
