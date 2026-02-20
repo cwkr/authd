@@ -42,9 +42,11 @@ and will load it's content when found.
     "http://localhost:7654/jwks.json"
   ],
   // available scopes
-  "extra_scope": "profile email offline_access",
+  "custom_scope": "profile email offline_access",
   "cookie_secret": "AwBVrwW0boviWc3L12PplWTEgO4B4dxi",
-  "keys_ttl": 900,
+  "session_name": "AUTHSESSION",
+  "session_lifetime": 28800,
+  "additional_keys_lifetime": 900,
   // disable REST API completely 
   "disable_api": false,
   // require JWT to query people details with REST API
@@ -61,25 +63,23 @@ and will load it's content when found.
   },
   "clients": {
     "app": {
-      "redirect_uris": [
-        "http://localhost*"
-      ],
       "audience": [
         "$issuer",
         "$client_id"
-      ]
+      ],
+      "redirect_uris": [
+        "http://localhost*"
+      ],
+      "signing_algorithm": "RS256"
     }
   },
-  "presets": {
-    "": {
-      "signing_algorithm": "RS256",
-      "access_token_ttl": 3600,
-      "refresh_token_ttl": 28800,
-      "id_token_ttl": 28800,
-      "session_name": "_auth",
-      "session_ttl": 28800
-    }
-  },
+  "defaults": {
+    "access_token_lifetime": 3600,
+    "auth_code_lifetime": 300,
+    "id_token_lifetime": 28800,
+    "refresh_token_lifetime": 28800,
+    "signing_algorithm": "RS256"
+  }
 }
 ```
 
@@ -122,12 +122,17 @@ Client column names are mapped by name:
 | column name                     |
 |---------------------------------|
 | `client_id`                     |
-| `secret_hash`                   |
-| `preset`                        |
+| `access_token_lifetime`         |
+| `audience`                      |
+| `auth_code_lifetime`            |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
+| `id_token_lifetime`             |
 | `redirect_uris`                 |
-| `audience`                      |
+| `refresh_token_lifetime`        |
+| `require_2fa`                   |
+| `signing_algorithm`             |
+| `secret_hash`                   |
 
 | audience placeholder variable |
 |-------------------------------|
@@ -138,7 +143,7 @@ Client column names are mapped by name:
 {
   "client_store": {
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
-    "lookup_query": "SELECT secret_hash, preset, disable_implicit, enable_refresh_token_rotation, redirect_uris, audience FROM clients WHERE lower(client_id) = lower($1)",
+    "lookup_query": "SELECT access_token_lifetime, audience, auth_code_lifetime, disable_implicit, enable_refresh_token_rotation, id_token_lifetime, redirect_uris, refresh_token_lifetime, require_2fa, signing_algorithm, secret_hash FROM clients WHERE lower(client_id) = lower($1)",
     "list_query": "SELECT client_id FROM clients"
   }
 }
@@ -203,12 +208,17 @@ Client column names are mapped case-sensitive by name:
 | column name                     |
 |---------------------------------|
 | `client_id`                     |
-| `secret_hash`                   |
-| `preset`                        |
+| `access_token_lifetime`         |
+| `audience`                      |
+| `auth_code_lifetime`            |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
+| `id_token_lifetime`             |
 | `redirect_uris`                 |
-| `audience`                      |
+| `refresh_token_lifetime`        |
+| `require_2fa`                   |
+| `signing_algorithm`             |
+| `secret_hash`                   |
 
 | audience placeholder variable |
 |-------------------------------|
@@ -219,7 +229,7 @@ Client column names are mapped case-sensitive by name:
 {
   "client_store": {
     "uri": "oracle://authserver:trustno1@localhost:1521/orcl?charset=UTF8",
-    "lookup_query": "SELECT secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\", redirect_uris \"redirect_uris\", audience \"audience\" FROM clients WHERE lower(client_id) = lower(:1)",
+    "lookup_query": "SELECT access_token_lifetime \"access_token_lifetime\", audience \"audience\", auth_code_lifetime \"auth_code_lifetime\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\", id_token_lifetime \"id_token_lifetime\", redirect_uris \"redirect_uris\", refresh_token_lifetime \"refresh_token_lifetime\", require_2fa \"require_2fa\", signing_algorithm \"signing_algorithm\", secret_hash \"secret_hash\" FROM clients WHERE lower(client_id) = lower(:1)",
     "list_query": "SELECT client_id \"client_id\" FROM clients"
   }
 }
@@ -254,65 +264,47 @@ Client column names are mapped case-sensitive by name:
 }
 ```
 
-#### Presets
+#### Custom token claims
 
-Presets predefine session and token live times as well as allow to specify custom token claims. Each client must have
-a preset assigned.
-
-| token extra claim placeholder variable |
-|----------------------------------------|
-| `$birthdate`                           |
-| `$client_id`                           |
-| `$department`                          |
-| `$email`                               |
-| `$family_name`                         |
-| `$given_name`                          |
-| `$groups`                              |
-| `$groups_space_delimited`              |
-| `$groups_comma_delimited`              |
-| `$groups_semicolon_delimited`          |
-| `$locality`                            |
-| `$phone_number`                        |
-| `$postal_code`                         |
-| `$roles`                               |
-| `$roles_space_delimited`               |
-| `$roles_comma_delimited`               |
-| `$roles_semicolon_delimited`           |
-| `$room_number`                         |
-| `$street_address`                      |
-| `$subject`                             |
-| `$user_id`                             |
+| token  claim placeholder variable |
+|-----------------------------------|
+| `$birthdate`                      |
+| `$client_id`                      |
+| `$department`                     |
+| `$email`                          |
+| `$family_name`                    |
+| `$given_name`                     |
+| `$groups`                         |
+| `$groups_space_delimited`         |
+| `$groups_comma_delimited`         |
+| `$groups_semicolon_delimited`     |
+| `$locality`                       |
+| `$phone_number`                   |
+| `$postal_code`                    |
+| `$roles`                          |
+| `$roles_space_delimited`          |
+| `$roles_comma_delimited`          |
+| `$roles_semicolon_delimited`      |
+| `$room_number`                    |
+| `$street_address`                 |
+| `$subject`                        |
+| `$user_id`                        |
 
 ```jsonc
 {
-  "clients": {
-    "foobar": {
-      "preset": "example"
-    }
+  // define custom access token claims
+  "custom_access_token_claims": {
+    "prn": "$subject",
+    "email": "$email",
+    "givenName": "$given_name",
+    "groups": "$groups_semicolon_delimited",
+    "sn": "$family_name",
+    "user_id": "$user_id"
   },
-  "presets": {
-    "example": {
-      "signing_algorithm": "PS256",
-      "access_token_ttl": 900,
-      "refresh_token_ttl": 28800,
-      "id_token_ttl": 28800,
-      "session_name": "_auth_example",
-      "session_ttl": 28800,
-      // define custom access token claims
-      "access_token_extra_claims": {
-        "prn": "$subject",
-        "email": "$email",
-        "givenName": "$given_name",
-        "groups": "$groups_semicolon_delimited",
-        "sn": "$family_name",
-        "user_id": "$user_id"
-      },
-      // define custom id token claims
-      "id_token_extra_claims": {
-        "groups": "$groups"
-      },
-    }
-  },
+  // define custom id token claims
+  "custom_id_token_claims": {
+    "groups": "$groups"
+  }
 }
 ```
 

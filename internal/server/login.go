@@ -72,7 +72,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		loginQueryBase64 = base64.RawURLEncoding.EncodeToString([]byte(r.URL.RawQuery))
 	)
 
-	userID, sessionActive, sessionVerified = j.sessionManager.CheckSession(r, client)
+	userID, sessionActive, sessionVerified = j.sessionManager.CheckSession(r)
 
 	if !sessionActive {
 		userID = strings.TrimSpace(r.FormValue("user_id"))
@@ -100,7 +100,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
 					var codeRequired = require2FA || kw != nil
-					if err := j.sessionManager.CreateSession(r, w, client, realUserID, !codeRequired); err != nil {
+					if err := j.sessionManager.CreateSession(r, w, realUserID, !codeRequired); err != nil {
 						htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
 						return
 					}
@@ -130,7 +130,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						message = "OTP Key not found"
 					} else {
 						if kw.VerifyCode(code) == true {
-							if err := j.sessionManager.VerifySession(r, w, client); err != nil {
+							if err := j.sessionManager.VerifySession(r, w); err != nil {
 								message = err.Error()
 							} else {
 								sessionVerified = true

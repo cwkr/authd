@@ -18,42 +18,62 @@ type sqlClient interface {
 }
 
 type postgresClient struct {
-	SecretHash                 sql.NullString `db:"secret_hash"`
+	AccessTokenLifetime        sql.NullInt32  `db:"access_token_lifetime"`
+	Audience                   pq.StringArray `db:"audience"`
+	AuthCodeLifetime           sql.NullInt32  `db:"auth_code_lifetime"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
-	Require2FA                 sql.NullBool   `db:"require_2fa"`
+	IDTokenLifetime            sql.NullInt32  `db:"id_token_lifetime"`
 	RedirectURIs               pq.StringArray `db:"redirect_uris"`
-	Audience                   pq.StringArray `db:"audience"`
+	RefreshTokenLifetime       sql.NullInt32  `db:"refresh_token_lifetime"`
+	Require2FA                 sql.NullBool   `db:"require_2fa"`
+	SigningAlgorithm           sql.NullString `db:"signing_algorithm"`
+	SecretHash                 sql.NullString `db:"secret_hash"`
 }
 
 func (p postgresClient) Client() *Client {
 	return &Client{
-		SecretHash:                 p.SecretHash.String,
+		AccessTokenLifetime:        int(p.AccessTokenLifetime.Int32),
+		Audience:                   p.Audience,
+		AuthCodeLifetime:           int(p.AuthCodeLifetime.Int32),
 		DisableImplicit:            p.DisableImplicit.Bool,
 		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
-		Require2FA:                 p.Require2FA.Bool,
+		IDTokenLifetime:            int(p.IDTokenLifetime.Int32),
 		RedirectURIs:               p.RedirectURIs,
-		Audience:                   p.Audience,
+		RefreshTokenLifetime:       int(p.RefreshTokenLifetime.Int32),
+		Require2FA:                 p.Require2FA.Bool,
+		SigningAlgorithm:           p.SigningAlgorithm.String,
+		SecretHash:                 p.SecretHash.String,
 	}
 }
 
 type genericClient struct {
-	SecretHash                 sql.NullString `db:"secret_hash"`
+	AccessTokenLifetime        sql.NullInt32  `db:"access_token_lifetime"`
+	Audience                   sql.NullString `db:"audience"`
+	AuthCodeLifetime           sql.NullInt32  `db:"auth_code_lifetime"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
-	Require2FA                 sql.NullBool   `db:"require_2fa"`
+	IDTokenLifetime            sql.NullInt32  `db:"id_token_lifetime"`
 	RedirectURIs               sql.NullString `db:"redirect_uris"`
-	Audience                   sql.NullString `db:"audience"`
+	RefreshTokenLifetime       sql.NullInt32  `db:"refresh_token_lifetime"`
+	Require2FA                 sql.NullBool   `db:"require_2fa"`
+	SigningAlgorithm           sql.NullString `db:"signing_algorithm"`
+	SecretHash                 sql.NullString `db:"secret_hash"`
 }
 
 func (p genericClient) Client() *Client {
 	return &Client{
-		SecretHash:                 p.SecretHash.String,
+		AccessTokenLifetime:        int(p.AccessTokenLifetime.Int32),
+		Audience:                   strings.Split(p.Audience.String, ","),
+		AuthCodeLifetime:           int(p.AuthCodeLifetime.Int32),
 		DisableImplicit:            p.DisableImplicit.Bool,
 		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
-		Require2FA:                 p.Require2FA.Bool,
+		IDTokenLifetime:            int(p.IDTokenLifetime.Int32),
+		RefreshTokenLifetime:       int(p.RefreshTokenLifetime.Int32),
 		RedirectURIs:               strings.Split(p.RedirectURIs.String, ","),
-		Audience:                   strings.Split(p.Audience.String, ","),
+		Require2FA:                 p.Require2FA.Bool,
+		SigningAlgorithm:           p.SigningAlgorithm.String,
+		SecretHash:                 p.SecretHash.String,
 	}
 }
 
@@ -103,7 +123,8 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 		storedClient = &genericClient{}
 	}
 	log.Printf("SQL: %s; -- %s", s.settings.LookupQuery, clientID)
-	// SELECT secret_hash, preset, disable_implicit, enable_refresh_token_rotation, redirect_uris, audience
+	// SELECT access_token_lifetime, audience, auth_code_lifetime, disable_implicit, enable_refresh_token_rotation,
+	// id_token_lifetime, redirect_uris, refresh_token_lifetime, require_2fa, signing_algorithm, secret_hash
 	// FROM clients WHERE lower(client_id) = lower($1)
 	if rows, err := s.dbconn.Query(s.settings.LookupQuery, clientID); err == nil {
 		if err := scan.RowStrict(storedClient, rows); err != nil {

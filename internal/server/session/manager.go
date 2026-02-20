@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/gorilla/sessions"
 )
 
@@ -16,11 +15,11 @@ type Current struct {
 }
 
 type Manager interface {
-	CheckSession(r *http.Request, client clients.Client) (string, bool, bool)
-	CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error
-	VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error
-	GetCurrentSession(s *Current, r *http.Request, client clients.Client)
-	EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error
+	CheckSession(r *http.Request) (string, bool, bool)
+	CreateSession(r *http.Request, w http.ResponseWriter, userID string, verified bool) error
+	VerifySession(r *http.Request, w http.ResponseWriter) error
+	GetCurrentSession(s *Current, r *http.Request)
+	EndSession(r *http.Request, w http.ResponseWriter) error
 }
 
 type manager struct {
@@ -37,7 +36,7 @@ func NewManager(sessionStore sessions.Store, sessionName string, sessionLifetime
 	}
 }
 
-func (m manager) CheckSession(r *http.Request, client clients.Client) (string, bool, bool) {
+func (m manager) CheckSession(r *http.Request) (string, bool, bool) {
 	var session, _ = m.sessionStore.Get(r, m.sessionName)
 
 	if session.Values["uid"] == nil {
@@ -61,7 +60,7 @@ func (m manager) CheckSession(r *http.Request, client clients.Client) (string, b
 	return "", false, false
 }
 
-func (m manager) CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error {
+func (m manager) CreateSession(r *http.Request, w http.ResponseWriter, userID string, verified bool) error {
 	var session, _ = m.sessionStore.Get(r, m.sessionName)
 	session.Values["uid"] = userID
 	session.Values["sct"] = time.Now().Unix()
@@ -76,7 +75,7 @@ func (m manager) CreateSession(r *http.Request, w http.ResponseWriter, client cl
 	return nil
 }
 
-func (m manager) VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+func (m manager) VerifySession(r *http.Request, w http.ResponseWriter) error {
 	var session, _ = m.sessionStore.Get(r, m.sessionName)
 	session.Values["vfd"] = time.Now().Unix()
 	if err := session.Save(r, w); err != nil {
@@ -85,7 +84,7 @@ func (m manager) VerifySession(r *http.Request, w http.ResponseWriter, client cl
 	return nil
 }
 
-func (m manager) GetCurrentSession(s *Current, r *http.Request, client clients.Client) {
+func (m manager) GetCurrentSession(s *Current, r *http.Request) {
 	var session, _ = m.sessionStore.Get(r, m.sessionName)
 	if session.IsNew || session.Values["uid"] == nil {
 		return
@@ -106,7 +105,7 @@ func (m manager) GetCurrentSession(s *Current, r *http.Request, client clients.C
 	s.ExpiresAt = createdAt.Add(time.Duration(m.sessionLifetime) * time.Second)
 }
 
-func (m manager) EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+func (m manager) EndSession(r *http.Request, w http.ResponseWriter) error {
 	var session, _ = m.sessionStore.Get(r, m.sessionName)
 	if !session.IsNew {
 		session.Options.MaxAge = -1

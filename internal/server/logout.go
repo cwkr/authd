@@ -79,7 +79,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	httputil.NoCache(w)
 
-	if err := l.sessionManager.EndSession(r, w, client); err != nil {
+	if err := l.sessionManager.EndSession(r, w); err != nil {
 		htmlutil.Error(w, l.basePath, err.Error(), http.StatusInternalServerError)
 		return
 	}

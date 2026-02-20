@@ -60,7 +60,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		client = *c
 	}
 
-	if uid, active, verified := o.sessionManager.CheckSession(r, client); active {
+	if uid, active, verified := o.sessionManager.CheckSession(r); active {
 		var (
 			algorithm                = strings.TrimSpace(r.FormValue("algorithm"))
 			digits                   int
@@ -108,7 +108,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							errorMessage = err.Error()
 						} else {
 							if !verified {
-								if err := o.sessionManager.VerifySession(r, w, client); err != nil {
+								if err := o.sessionManager.VerifySession(r, w); err != nil {
 									htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 									return
 								}
@@ -135,7 +135,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					if !require2FA && !verified {
-						if err := o.sessionManager.VerifySession(r, w, client); err != nil {
+						if err := o.sessionManager.VerifySession(r, w); err != nil {
 							htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
 							return
 						}

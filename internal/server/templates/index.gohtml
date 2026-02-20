@@ -10,7 +10,16 @@
     <script src="{{ .base_path }}/scripts/main.js" type="module"></script>
 </head>
 <body>
-<h1>{{ .title }}</h1>
+<div style="display: flex; flex-direction: row; align-items: baseline; gap: 1em;">
+    <h1>{{ .title }}</h1>
+    {{- if .current_session.UserID }}
+    <strong style="margin-left: auto;" title="Authenticated {{ .current_session.CreatedAt }}&#10;Verified {{ if .current_session.VerifiedAt.IsZero }}no{{ else }}{{ .current_session.VerifiedAt }}{{ end }}&#10;Session expires {{ .current_session.ExpiresAt }}">{{ .current_session.UserID }}</strong>
+    <form method="get" action="{{ .base_path }}/logout">
+        <input type="hidden" name="post_logout_redirect_uri" value="{{ .issuer }}/">
+        <button type="submit">Logout</button>
+    </form>
+    {{- end }}
+</div>
 
 <div>
     <a href="{{ .base_path }}/.well-known/openid-configuration">OpenID Connect discovery document</a>
@@ -21,43 +30,6 @@
     <a href="{{ .base_path }}/jwks">JSON Web Key Set</a>
 </div>
 <pre><code>{{ .public_key }}</code></pre>
-
-<h2>Active sessions</h2>
-{{- if .active_sessions }}
-<form method="get" action="{{ .base_path }}/logout">
-    <input type="hidden" name="post_logout_redirect_uri" value="{{ .issuer }}/">
-    <table>
-        <thead>
-        <tr>
-            <th>Client</th>
-            <th>Created</th>
-            <th>Verified</th>
-            <th>Expires</th>
-            <th>Username</th>
-            <th>Logout</th>
-        </tr>
-        </thead>
-        <tbody>
-        {{- range .active_sessions }}
-        <tr>
-            <td>{{ .ClientID }}</td>
-            <td>{{ .SessionInfo.CreatedAt }}</td>
-            <td>{{ if .SessionInfo.VerifiedAt.IsZero }}no{{ else }}{{ .SessionInfo.VerifiedAt }}{{ end }}</td>
-            <td>{{ .SessionInfo.ExpiresAt }}</td>
-            <td>{{ .UserID }}</td>
-            <td>
-                <button type="submit" name="client_id" value="{{ .ClientID }}">&times;</button>
-            </td>
-        </tr>
-        {{- end }}
-        </tbody>
-    </table>
-</form>
-{{- else }}
-    <div>
-        <i>No active sessions</i>
-    </div>
-{{- end }}
 
 <h2>Token Request</h2>
 <form method="get" action="{{ .base_path }}/authorize" id="request_form">

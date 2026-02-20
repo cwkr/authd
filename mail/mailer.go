@@ -28,7 +28,7 @@ func (s simpleMailer) SendMail(to string, subject string, content string) error 
 	return smtp.SendMail(s.host, s.auth, s.from, []string{to}, []byte(body))
 }
 
-func NewMailer(settings MailSettings) (Mailer, error) {
+func NewMailer(settings *MailSettings) (Mailer, error) {
 	if mailURL, err := url.Parse(settings.ServerURI); err != nil {
 		return nil, err
 	} else {

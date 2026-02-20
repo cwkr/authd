@@ -348,11 +348,15 @@ func main() {
 
 	var mailer mail.Mailer
 
-	if strings.TrimSpace(serverSettings.Mail.ServerURI) != "" {
-		if m, err := mail.NewMailer(serverSettings.Mail); err != nil {
-			log.Fatalf("!!! %s", err)
+	if serverSettings.Mail != nil {
+		if strings.HasPrefix(serverSettings.Mail.ServerURI, "smtp:") || strings.HasPrefix(serverSettings.Mail.ServerURI, "smtps:") {
+			if m, err := mail.NewMailer(serverSettings.Mail); err != nil {
+				log.Fatalf("!!! %s", err)
+			} else {
+				mailer = m
+			}
 		} else {
-			mailer = m
+			log.Fatalf("!!! unsupported or empty mail.server_uri: %s", serverSettings.Mail.ServerURI)
 		}
 	}
 

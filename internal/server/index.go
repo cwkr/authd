@@ -33,31 +33,22 @@ type indexHandler struct {
 	version        string
 }
 
-type activeSession struct {
-	ClientID    string
-	UserID      string
-	SessionInfo session.Current
-}
-
 func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 
-	var clientIDs []string
-	var activeSessions []activeSession
+	var (
+		clientIDs      []string
+		currentSession session.Current
+	)
 
 	if cids, err := i.clientStore.List(); err == nil {
 		clientIDs = cids
-		for _, cid := range cids {
-			var client, _ = i.clientStore.Lookup(cid)
-			if uid, active, _ := i.sessionManager.CheckSession(r, *client); active {
-				var a = activeSession{ClientID: cid, UserID: uid}
-				i.sessionManager.GetCurrentSession(&a.SessionInfo, r, *client)
-				activeSessions = append(activeSessions, a)
-			}
-		}
 	} else {
 		htmlutil.Error(w, i.basePath, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	i.sessionManager.GetCurrentSession(&currentSession, r)
 
 	httputil.NoCache(w)
 
@@ -78,7 +69,7 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"code_challenge":  pkce.CodeChallange(codeVerifier),
 		"version":         i.version,
 		"client_ids":      clientIDs,
-		"active_sessions": activeSessions,
+		"current_session": currentSession,
 	})
 	if err != nil {
 		htmlutil.Error(w, i.basePath, err.Error(), http.StatusInternalServerError)

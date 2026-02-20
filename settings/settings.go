@@ -60,7 +60,7 @@ type Server struct {
 	AdditionalKeysLifetime    int                               `json:"additional_keys_lifetime,omitempty"`
 	Roles                     oauth2.RoleMappings               `json:"roles,omitempty"`
 	AdministratorRole         string                            `json:"administrator_role,omitempty"`
-	Mail                      mail.MailSettings                 `json:"mail,omitempty"`
+	Mail                      *mail.MailSettings                `json:"mail,omitempty"`
 	rsaSigningKey             *rsa.PrivateKey
 	rsaSigningKeyID           string
 	keySetProvider            keyset.Provider
