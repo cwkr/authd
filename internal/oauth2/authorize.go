@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/cwkr/authd/internal/htmlutil"
@@ -14,7 +13,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/stringutil"
 )
 
@@ -32,9 +31,10 @@ func IntersectScope(availableScope, requestedScope string) string {
 }
 
 type authorizeHandler struct {
+	issuer         string
 	basePath       string
 	tokenService   TokenCreator
-	sessionManager sessions.SessionManager
+	sessionManager session.Manager
 	peopleStore    people.Store
 	clientStore    clients.Store
 	presets        presets.Presets
@@ -75,7 +75,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		client = *c
 	}
 
-	if client.RedirectURIPattern != "" && !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
+	if !strings.HasPrefix(redirectURI, strings.TrimRight(a.issuer, "/")) && !client.MatchesRedirectURI(redirectURI) {
 		htmlutil.Error(w, a.basePath, ErrorRedirectURIMismatch, http.StatusBadRequest)
 		return
 	}
@@ -103,7 +103,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch responseType {
 	case ResponseTypeToken:
 		timing.Start("jwtgen")
-		var accessToken, err = a.tokenService.GenerateAccessToken(user, client.PresetID, user.UserID, clientID, IntersectScope(a.scope, scope))
+		var accessToken, err = a.tokenService.GenerateAccessToken(user, client, client.PresetID, user.UserID, clientID, IntersectScope(a.scope, scope))
 		if err != nil {
 			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
 			return
@@ -141,8 +141,9 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func AuthorizeHandler(basePath string, tokenService TokenCreator, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, presets presets.Presets, scope string) http.Handler {
+func AuthorizeHandler(issuer, basePath string, tokenService TokenCreator, sessionManager session.Manager, peopleStore people.Store, clientStore clients.Store, presets presets.Presets, scope string) http.Handler {
 	return &authorizeHandler{
+		issuer:         issuer,
 		basePath:       basePath,
 		tokenService:   tokenService,
 		sessionManager: sessionManager,

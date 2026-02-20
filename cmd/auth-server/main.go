@@ -22,7 +22,7 @@ import (
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server"
-	sessions2 "github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/sqlutil"
 	"github.com/cwkr/authd/mail"
 	"github.com/cwkr/authd/middleware"
@@ -292,7 +292,7 @@ func main() {
 	} else {
 		log.Fatalf("!!! %s", err)
 	}
-	var sessionManager = sessions2.NewSessionManager(sessionStore, presets)
+	var sessionManager = session.NewManager(sessionStore, presets)
 
 	var dbs = make(map[string]*sql.DB)
 
@@ -340,9 +340,9 @@ func main() {
 		revocationStore = revocation.NewNoopStore()
 	}
 
-	if serverSettings.OtpauthStore != nil {
-		if sqlutil.IsDatabaseURI(serverSettings.OtpauthStore.URI) {
-			if otpauthStore, err = otpauth.NewSqlStore(users, dbs, serverSettings.OtpauthStore); err != nil {
+	if serverSettings.OTPAuthStore != nil {
+		if sqlutil.IsDatabaseURI(serverSettings.OTPAuthStore.URI) {
+			if otpauthStore, err = otpauth.NewSqlStore(users, dbs, serverSettings.OTPAuthStore); err != nil {
 				log.Fatalf("!!! %s", err)
 			}
 		} else {
@@ -391,7 +391,7 @@ func main() {
 		Methods(http.MethodGet, http.MethodOptions)
 	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, presets, scope)).
 		Methods(http.MethodOptions, http.MethodPost)
-	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(basePath, tokenCreator, sessionManager, peopleStore, clientStore, presets, scope)).
+	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(serverSettings.Issuer, basePath, tokenCreator, sessionManager, peopleStore, clientStore, presets, scope)).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation)).
 		Methods(http.MethodGet, http.MethodOptions)

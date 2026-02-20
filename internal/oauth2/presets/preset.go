@@ -2,7 +2,6 @@ package presets
 
 type Preset struct {
 	SigningAlgorithm       string            `json:"signing_algorithm,omitempty"`
-	Audiences              []string          `json:"audiences,omitempty"`
 	AccessTokenExtraClaims map[string]string `json:"access_token_extra_claims,omitempty"`
 	AccessTokenTTL         int               `json:"access_token_ttl"`
 	RefreshTokenTTL        int               `json:"refresh_token_ttl"`

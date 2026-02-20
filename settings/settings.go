@@ -42,7 +42,7 @@ type Server struct {
 	CookieSecret              string                            `json:"cookie_secret"`
 	UserinfoExtraClaims       map[string]string                 `json:"userinfo_extra_claims,omitempty"`
 	PeopleStore               *people.StoreSettings             `json:"people_store,omitempty"`
-	OtpauthStore              *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
+	OTPAuthStore              *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
 	DisableAPI                bool                              `json:"disable_api,omitempty"`
 	PeopleAPICustomVersions   map[string]CustomPeopleAPI        `json:"people_api_custom_versions,omitempty"`
 	PeopleAPIRequireAuthN     bool                              `json:"people_api_require_authn,omitempty"`
@@ -83,16 +83,15 @@ func NewDefault(port int) *Server {
 }
 
 func (s *Server) LoadKeys(dir string) error {
-	var err error
-
 	if strings.HasPrefix(s.Key, "-----BEGIN RSA PRIVATE KEY-----") {
 		block, _ := pem.Decode([]byte(s.Key))
 		if s.rsaSigningKeyID = block.Headers[keyset.HeaderKeyID]; s.rsaSigningKeyID == "" {
 			s.rsaSigningKeyID = "sigkey"
 		}
-		s.rsaSigningKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err != nil {
+		if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
 			return err
+		} else {
+			s.rsaSigningKey = key
 		}
 	} else if strings.HasPrefix(s.Key, "@") {
 		var filename = filepath.Join(dir, s.Key[1:])
@@ -104,9 +103,10 @@ func (s *Server) LoadKeys(dir string) error {
 		if s.rsaSigningKeyID = block.Headers[keyset.HeaderKeyID]; s.rsaSigningKeyID == "" {
 			s.rsaSigningKeyID = strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 		}
-		s.rsaSigningKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err != nil {
+		if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
 			return err
+		} else {
+			s.rsaSigningKey = key
 		}
 	} else {
 		return errors.New("missing or malformed signing key")
@@ -115,7 +115,8 @@ func (s *Server) LoadKeys(dir string) error {
 	var keys = append([]string{s.PublicKeyPEM(true)}, s.AdditionalKeys...)
 
 	s.keySetProvider = keyset.NewProvider(dir, keys, time.Duration(s.KeysTTL)*time.Second)
-	return err
+
+	return nil
 }
 
 func (s *Server) GenerateSigningKey(keySize int, keyID string) error {

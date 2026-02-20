@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -18,7 +17,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/otpauth"
-	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/stringutil"
 )
 
@@ -35,7 +34,7 @@ func LoadSetup2FATemplate(filename string) error {
 }
 
 type setup2FAHandler struct {
-	sessionManager sessions.SessionManager
+	sessionManager session.Manager
 	clientStore    clients.Store
 	presets        presets.Presets
 	otpauthStore   otpauth.Store
@@ -118,7 +117,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							}
 							generatedRecoveryCode = grc
 							if redirectURI != "" {
-								if strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) || regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
+								if strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) || client.MatchesRedirectURI(redirectURI) {
 									postSetupContinuationURI = redirectURI
 								}
 							} else if loginQueryBase64 != "" {
@@ -144,13 +143,9 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					if redirectURI != "" {
-						if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) {
-							if client.RedirectURIPattern != "" {
-								if !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
-									htmlutil.Error(w, o.basePath, "post_setup_redirect_uri does not match Clients redirect URI pattern", http.StatusBadRequest)
-									return
-								}
-							}
+						if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) && !client.MatchesRedirectURI(redirectURI) {
+							htmlutil.Error(w, o.basePath, "post_setup_redirect_uri mismatch", http.StatusBadRequest)
+							return
 						}
 						http.Redirect(w, r, redirectURI, http.StatusFound)
 						return
@@ -212,7 +207,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Setup2FAHandler(sessionManager sessions.SessionManager, clientStore clients.Store, presets presets.Presets, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
+func Setup2FAHandler(sessionManager session.Manager, clientStore clients.Store, presets presets.Presets, otpauthStore otpauth.Store, basePath, version, issuer string) http.Handler {
 	return &setup2FAHandler{
 		sessionManager: sessionManager,
 		clientStore:    clientStore,

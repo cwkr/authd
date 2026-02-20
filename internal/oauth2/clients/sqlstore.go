@@ -10,23 +10,50 @@ import (
 	"github.com/blockloop/scan/v2"
 	"github.com/cwkr/authd/internal/maputil"
 	"github.com/cwkr/authd/internal/sqlutil"
+	"github.com/lib/pq"
 )
 
-type sqlClient struct {
-	RedirectURIPattern         sql.NullString `db:"redirect_uri_pattern"`
+type sqlClient interface {
+	Client() *Client
+}
+
+type postgresClient struct {
 	SecretHash                 sql.NullString `db:"secret_hash"`
 	PresetID                   sql.NullString `db:"preset"`
 	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
 	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
+	RedirectURIs               pq.StringArray `db:"redirect_uris"`
+	Audience                   pq.StringArray `db:"audience"`
 }
 
-func (s *sqlClient) Client() *Client {
+func (p postgresClient) Client() *Client {
 	return &Client{
-		RedirectURIPattern:         s.RedirectURIPattern.String,
-		SecretHash:                 s.SecretHash.String,
-		PresetID:                   s.PresetID.String,
-		DisableImplicit:            s.DisableImplicit.Bool,
-		EnableRefreshTokenRotation: s.EnableRefreshTokenRotation.Bool,
+		SecretHash:                 p.SecretHash.String,
+		PresetID:                   p.PresetID.String,
+		DisableImplicit:            p.DisableImplicit.Bool,
+		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
+		RedirectURIs:               p.RedirectURIs,
+		Audience:                   p.Audience,
+	}
+}
+
+type genericClient struct {
+	SecretHash                 sql.NullString `db:"secret_hash"`
+	PresetID                   sql.NullString `db:"preset"`
+	DisableImplicit            sql.NullBool   `db:"disable_implicit"`
+	EnableRefreshTokenRotation sql.NullBool   `db:"enable_refresh_token_rotation"`
+	RedirectURIs               sql.NullString `db:"redirect_uris"`
+	Audience                   sql.NullString `db:"audience"`
+}
+
+func (p genericClient) Client() *Client {
+	return &Client{
+		SecretHash:                 p.SecretHash.String,
+		PresetID:                   p.PresetID.String,
+		DisableImplicit:            p.DisableImplicit.Bool,
+		EnableRefreshTokenRotation: p.EnableRefreshTokenRotation.Bool,
+		RedirectURIs:               strings.Split(p.RedirectURIs.String, ","),
+		Audience:                   strings.Split(p.Audience.String, ","),
 	}
 }
 
@@ -69,12 +96,17 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 		return nil, nil
 	}
 
-	var client sqlClient
+	var storedClient sqlClient
+	if strings.HasPrefix(s.settings.URI, sqlutil.PrefixPostgres) {
+		storedClient = &postgresClient{}
+	} else {
+		storedClient = &genericClient{}
+	}
 	log.Printf("SQL: %s; -- %s", s.settings.LookupQuery, clientID)
-	// SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation
+	// SELECT secret_hash, preset, disable_implicit, enable_refresh_token_rotation, redirect_uris, audience
 	// FROM clients WHERE lower(client_id) = lower($1)
 	if rows, err := s.dbconn.Query(s.settings.LookupQuery, clientID); err == nil {
-		if err := scan.RowStrict(&client, rows); err != nil {
+		if err := scan.RowStrict(storedClient, rows); err != nil {
 			log.Printf("!!! Scan client failed: %v", err)
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrClientNotFound
@@ -85,8 +117,8 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 		log.Printf("!!! Query for client failed: %v", err)
 		return nil, err
 	}
-	log.Printf("%#v", client)
-	return client.Client(), nil
+	log.Printf("%#v", storedClient)
+	return storedClient.Client(), nil
 }
 
 func (s *sqlStore) List() ([]string, error) {

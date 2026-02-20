@@ -61,7 +61,13 @@ and will load it's content when found.
   },
   "clients": {
     "app": {
-      "redirect_uri_pattern": "https?:\\/\\/localhost(:\\d+)?\\/"
+      "redirect_uris": [
+        "http://localhost*"
+      ],
+      "audience": [
+        "$issuer",
+        "$client_id"
+      ]
     }
   },
   "presets": {
@@ -116,17 +122,23 @@ Client column names are mapped by name:
 | column name                     |
 |---------------------------------|
 | `client_id`                     |
-| `redirect_uri_pattern`          |
 | `secret_hash`                   |
 | `preset`                        |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
+| `redirect_uris`                 |
+| `audience`                      |
+
+| audience placeholder variable |
+|-------------------------------|
+| `$client_id`                  |
+| `$issuer`                     |
 
 ```jsonc
 {
   "client_store": {
     "uri": "postgresql://authserver:trustno1@localhost:5432/dev?sslmode=disable",
-    "lookup_query": "SELECT redirect_uri_pattern, secret_hash, preset, disable_implicit, enable_refresh_token_rotation FROM clients WHERE lower(client_id) = lower($1)",
+    "lookup_query": "SELECT secret_hash, preset, disable_implicit, enable_refresh_token_rotation, redirect_uris, audience FROM clients WHERE lower(client_id) = lower($1)",
     "list_query": "SELECT client_id FROM clients"
   }
 }
@@ -191,17 +203,23 @@ Client column names are mapped case-sensitive by name:
 | column name                     |
 |---------------------------------|
 | `client_id`                     |
-| `redirect_uri_pattern`          |
 | `secret_hash`                   |
 | `preset`                        |
 | `disable_implicit`              |
 | `enable_refresh_token_rotation` |
+| `redirect_uris`                 |
+| `audience`                      |
+
+| audience placeholder variable |
+|-------------------------------|
+| `$client_id`                  |
+| `$issuer`                     |
 
 ```jsonc
 {
   "client_store": {
     "uri": "oracle://authserver:trustno1@localhost:1521/orcl?charset=UTF8",
-    "lookup_query": "SELECT redirect_uri_pattern \"redirect_uri_pattern\", secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\" FROM clients WHERE lower(client_id) = lower(:1)",
+    "lookup_query": "SELECT secret_hash \"secret_hash\", preset \"preset\", disable_implicit \"disable_implicit\", enable_refresh_token_rotation \"enable_refresh_token_rotation\", redirect_uris \"redirect_uris\", audience \"audience\" FROM clients WHERE lower(client_id) = lower(:1)",
     "list_query": "SELECT client_id \"client_id\" FROM clients"
   }
 }
@@ -265,11 +283,6 @@ a preset assigned.
 | `$subject`                             |
 | `$user_id`                             |
 
-| audience placeholder variable |
-|-------------------------------|
-| `$client_id`                  |
-| `$issuer`                     |
-
 ```jsonc
 {
   "clients": {
@@ -280,7 +293,6 @@ a preset assigned.
   "presets": {
     "example": {
       "signing_algorithm": "PS256",
-      "audiences": ["$client_id", "https://example.org"],
       "access_token_ttl": 900,
       "refresh_token_ttl": 28800,
       "id_token_ttl": 28800,

@@ -123,7 +123,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: userID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.PresetID, userID, clientID, IntersectScope(t.scope, scope))
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, userID, clientID, IntersectScope(t.scope, scope))
 		timing.Stop("jwtgen")
 	case GrantTypeAuthorizationCode:
 		var codeClaims, authCodeErr = t.tokenService.Verify(code, TokenTypeCode)
@@ -160,7 +160,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: codeClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.PresetID, codeClaims.UserID, clientID, codeClaims.Scope)
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, codeClaims.UserID, clientID, codeClaims.Scope)
 		if strings.Contains(codeClaims.Scope, "offline_access") {
 			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.PresetID, codeClaims.UserID, clientID, codeClaims.Scope, codeClaims.Nonce)
 		}
@@ -195,7 +195,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("store")
 		var user = User{Person: *person, UserID: refreshClaims.UserID}
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(user, client.PresetID, refreshClaims.UserID, clientID, refreshClaims.Scope)
+		accessToken, _ = t.tokenService.GenerateAccessToken(user, client, client.PresetID, refreshClaims.UserID, clientID, refreshClaims.Scope)
 		if client.EnableRefreshTokenRotation && strings.Contains(refreshClaims.Scope, "offline_access") {
 			_ = t.revocationStore.Put(refreshClaims.TokenID, refreshClaims.Expiry.Time())
 			refreshToken, _ = t.tokenService.GenerateRefreshToken(client.PresetID, refreshClaims.UserID, clientID, refreshClaims.Scope, refreshClaims.Nonce)
@@ -217,7 +217,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		timing.Start("jwtgen")
-		accessToken, _ = t.tokenService.GenerateAccessToken(User{}, client.PresetID, clientID, clientID, IntersectScope(t.scope, scope))
+		accessToken, _ = t.tokenService.GenerateAccessToken(User{}, client, client.PresetID, clientID, clientID, IntersectScope(t.scope, scope))
 		timing.Stop("jwtgen")
 	default:
 		Error(w, ErrorUnsupportedGrantType, "only grant types 'authorization_code', 'client_credentials', 'password' and 'refresh_token' are supported", http.StatusBadRequest)

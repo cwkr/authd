@@ -18,7 +18,7 @@ import (
 	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
-	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/stringutil"
 )
 
@@ -36,7 +36,7 @@ func LoadLoginTemplate(filename string) error {
 
 type loginHandler struct {
 	basePath             string
-	sessionManager       sessions.SessionManager
+	sessionManager       session.Manager
 	peopleStore          people.Store
 	clientStore          clients.Store
 	otpauthStore         otpauth.Store
@@ -186,7 +186,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func LoginHandler(basePath string, sessionManager sessions.SessionManager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, presets presets.Presets, issuer string, passwordResetEnabled bool) http.Handler {
+func LoginHandler(basePath string, sessionManager session.Manager, peopleStore people.Store, clientStore clients.Store, otpauthStore otpauth.Store, presets presets.Presets, issuer string, passwordResetEnabled bool) http.Handler {
 	return &loginHandler{
 		basePath:             basePath,
 		sessionManager:       sessionManager,

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/presets"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/go-jose/go-jose/v3"
@@ -56,7 +57,7 @@ func NewTokenID(timestamp time.Time) string {
 }
 
 type TokenCreator interface {
-	GenerateAccessToken(user User, presetID, subject, clientID, scope string) (string, error)
+	GenerateAccessToken(user User, client clients.Client, presetID, subject, clientID, scope string) (string, error)
 	GenerateIDToken(user User, presetID, clientID, scope, accessTokenHash, nonce string) (string, error)
 	GenerateAuthCode(presetID, userID, clientID, scope, challenge, nonce string) (string, error)
 	GeneratePasswordResetToken(presetID, userID, clientID string) (string, error)
@@ -86,7 +87,7 @@ func (t tokenCreator) Issuer() string {
 	return t.issuer
 }
 
-func (t tokenCreator) GenerateAccessToken(user User, presetID, subject, clientID, scope string) (string, error) {
+func (t tokenCreator) GenerateAccessToken(user User, client clients.Client, presetID, subject, clientID, scope string) (string, error) {
 	var (
 		now    = time.Now()
 		preset = t.presets[strings.ToLower(presetID)]
@@ -111,14 +112,14 @@ func (t tokenCreator) GenerateAccessToken(user User, presetID, subject, clientID
 		return ""
 	}
 
-	if len(preset.Audiences) > 0 {
-		if len(preset.Audiences) == 1 {
-			if aud := strings.TrimSpace(os.Expand(preset.Audiences[0], audExpandFn)); aud != "" {
+	if len(client.Audience) > 0 {
+		if len(client.Audience) == 1 {
+			if aud := strings.TrimSpace(os.Expand(client.Audience[0], audExpandFn)); aud != "" {
 				claims[ClaimAudience] = aud
 			}
 		} else {
 			var audiences []string
-			for _, audTmpl := range preset.Audiences {
+			for _, audTmpl := range client.Audience {
 				if aud := strings.TrimSpace(os.Expand(audTmpl, audExpandFn)); aud != "" {
 					audiences = append(audiences, aud)
 				}

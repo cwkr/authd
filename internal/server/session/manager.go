@@ -1,4 +1,4 @@
-package sessions
+package session
 
 import (
 	"net/http"
@@ -17,7 +17,7 @@ type SessionInfo struct {
 	ExpiresAt  time.Time
 }
 
-type SessionManager interface {
+type Manager interface {
 	CheckSession(r *http.Request, client clients.Client) (string, bool, bool)
 	CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error
 	VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error
@@ -25,20 +25,20 @@ type SessionManager interface {
 	EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error
 }
 
-type sessionManager struct {
+type manager struct {
 	sessionStore sessions.Store
 	presets      presets.Presets
 }
 
-func NewSessionManager(sessionStore sessions.Store, presets presets.Presets) SessionManager {
-	return &sessionManager{
+func NewManager(sessionStore sessions.Store, presets presets.Presets) Manager {
+	return &manager{
 		sessionStore: sessionStore,
 		presets:      presets,
 	}
 }
 
-func (e sessionManager) CheckSession(r *http.Request, client clients.Client) (string, bool, bool) {
-	var session, _ = e.sessionStore.Get(r, e.presets[strings.ToLower(client.PresetID)].SessionName)
+func (m manager) CheckSession(r *http.Request, client clients.Client) (string, bool, bool) {
+	var session, _ = m.sessionStore.Get(r, m.presets[strings.ToLower(client.PresetID)].SessionName)
 
 	if session.Values["uid"] == nil {
 		return "", false, false
@@ -54,15 +54,15 @@ func (e sessionManager) CheckSession(r *http.Request, client clients.Client) (st
 		verifiedAt = time.Unix(vfd, 0)
 	}
 
-	if createdAt.Add(time.Duration(e.presets[strings.ToLower(client.PresetID)].SessionTTL) * time.Second).After(time.Now()) {
+	if createdAt.Add(time.Duration(m.presets[strings.ToLower(client.PresetID)].SessionTTL) * time.Second).After(time.Now()) {
 		return session.Values["uid"].(string), true, !verifiedAt.Before(createdAt)
 	}
 
 	return "", false, false
 }
 
-func (e sessionManager) CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error {
-	var session, _ = e.sessionStore.Get(r, e.presets[strings.ToLower(client.PresetID)].SessionName)
+func (m manager) CreateSession(r *http.Request, w http.ResponseWriter, client clients.Client, userID string, verified bool) error {
+	var session, _ = m.sessionStore.Get(r, m.presets[strings.ToLower(client.PresetID)].SessionName)
 	session.Values["uid"] = userID
 	session.Values["sct"] = time.Now().Unix()
 	if verified {
@@ -76,8 +76,8 @@ func (e sessionManager) CreateSession(r *http.Request, w http.ResponseWriter, cl
 	return nil
 }
 
-func (e sessionManager) VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
-	var session, _ = e.sessionStore.Get(r, e.presets[strings.ToLower(client.PresetID)].SessionName)
+func (m manager) VerifySession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+	var session, _ = m.sessionStore.Get(r, m.presets[strings.ToLower(client.PresetID)].SessionName)
 	session.Values["vfd"] = time.Now().Unix()
 	if err := session.Save(r, w); err != nil {
 		return err
@@ -85,8 +85,8 @@ func (e sessionManager) VerifySession(r *http.Request, w http.ResponseWriter, cl
 	return nil
 }
 
-func (e sessionManager) GetSessionInfo(s *SessionInfo, r *http.Request, client clients.Client) {
-	var session, _ = e.sessionStore.Get(r, e.presets[strings.ToLower(client.PresetID)].SessionName)
+func (m manager) GetSessionInfo(s *SessionInfo, r *http.Request, client clients.Client) {
+	var session, _ = m.sessionStore.Get(r, m.presets[strings.ToLower(client.PresetID)].SessionName)
 	if session.IsNew || session.Values["uid"] == nil {
 		return
 	}
@@ -103,11 +103,11 @@ func (e sessionManager) GetSessionInfo(s *SessionInfo, r *http.Request, client c
 	s.UserID = session.Values["uid"].(string)
 	s.CreatedAt = createdAt
 	s.VerifiedAt = verifiedAt
-	s.ExpiresAt = createdAt.Add(time.Duration(e.presets[strings.ToLower(client.PresetID)].SessionTTL) * time.Second)
+	s.ExpiresAt = createdAt.Add(time.Duration(m.presets[strings.ToLower(client.PresetID)].SessionTTL) * time.Second)
 }
 
-func (e sessionManager) EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
-	var session, _ = e.sessionStore.Get(r, e.presets[strings.ToLower(client.PresetID)].SessionName)
+func (m manager) EndSession(r *http.Request, w http.ResponseWriter, client clients.Client) error {
+	var session, _ = m.sessionStore.Get(r, m.presets[strings.ToLower(client.PresetID)].SessionName)
 	if !session.IsNew {
 		session.Options.MaxAge = -1
 		if err := session.Save(r, w); err != nil {

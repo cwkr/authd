@@ -6,13 +6,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/cwkr/authd/internal/server/sessions"
+	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/cwkr/authd/settings"
 	"github.com/go-jose/go-jose/v3/jwt"
@@ -33,7 +32,7 @@ func LoadLogoutTemplate(filename string) error {
 type logoutHandler struct {
 	basePath       string
 	serverSettings *settings.Server
-	sessionManager sessions.SessionManager
+	sessionManager session.Manager
 	clientStore    clients.Store
 	tpl            *template.Template
 }
@@ -72,11 +71,9 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if redirectURI != "" && !strings.HasPrefix(redirectURI, strings.TrimRight(l.serverSettings.Issuer, "/")) {
-		if client.RedirectURIPattern != "" {
-			if !regexp.MustCompile(client.RedirectURIPattern).MatchString(redirectURI) {
-				htmlutil.Error(w, l.basePath, "post_logout_redirect_uri does not match Clients redirect URI pattern", http.StatusBadRequest)
-				return
-			}
+		if !client.MatchesRedirectURI(redirectURI) {
+			htmlutil.Error(w, l.basePath, "post_logout_redirect_uri mismatch", http.StatusBadRequest)
+			return
 		}
 	}
 
@@ -98,7 +95,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func LogoutHandler(basePath string, serverSettings *settings.Server, sessionManager sessions.SessionManager, clientStore clients.Store) http.Handler {
+func LogoutHandler(basePath string, serverSettings *settings.Server, sessionManager session.Manager, clientStore clients.Store) http.Handler {
 	return &logoutHandler{
 		basePath:       basePath,
 		serverSettings: serverSettings,
