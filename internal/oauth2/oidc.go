@@ -2,7 +2,8 @@ package oauth2
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -46,7 +47,7 @@ type discoveryDocumentHandler struct {
 }
 
 func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, false)
 

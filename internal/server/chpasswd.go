@@ -3,14 +3,15 @@ package server
 import (
 	_ "embed"
 	"errors"
+	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/cwkr/authd/internal/htmlutil"
+	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/revocation"
 	"github.com/cwkr/authd/internal/people"
@@ -42,7 +43,7 @@ type changePasswdHandler struct {
 }
 
 func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		errorMessage   string
@@ -65,7 +66,7 @@ func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, jwt.ErrExpired) {
 			linkExpired = true
 		} else {
-			htmlutil.Error(w, c.basePath, err.Error(), http.StatusBadRequest)
+			httputil.PlainError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -84,7 +85,7 @@ func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				errorMessage = "password and confirm_password do not match"
 			} else {
 				if err := c.peopleStore.ChangePassword(userID, password); err != nil {
-					htmlutil.Error(w, c.basePath, err.Error(), http.StatusInternalServerError)
+					httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
 				_ = c.revocationStore.Put(tokenID, expiryTime)
@@ -101,7 +102,7 @@ func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"base_path":       c.basePath,
 		"version":         c.version,
 	}); err != nil {
-		htmlutil.Error(w, c.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

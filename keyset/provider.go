@@ -5,15 +5,16 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/go-jose/go-jose/v3"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-jose/go-jose/v3"
 )
 
 type Provider interface {
@@ -34,7 +35,7 @@ func NewProvider(dir string, keys []string, cacheDuration time.Duration) Provide
 }
 
 func (p *provider) load() (map[string]any, error) {
-	log.Print("Retrieving public keys")
+	slog.Info("Retrieving public keys")
 	var publicKeys = make(map[string]any)
 
 	for index, rawKey := range p.keys {
@@ -52,7 +53,7 @@ func (p *provider) load() (map[string]any, error) {
 				kid = fmt.Sprintf("key%d", index+1)
 			}
 		} else if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
-			log.Printf("GET %s", key)
+			slog.Info(fmt.Sprintf("GET %s", key))
 			if resp, err := http.Get(key); err == nil && resp.StatusCode == http.StatusOK {
 				var jwksBytes []byte
 				jwksBytes, err = io.ReadAll(resp.Body)
@@ -148,7 +149,7 @@ func (p *provider) load() (map[string]any, error) {
 
 func (p *provider) Get() (map[string]any, error) {
 	if p.cachedPublicKeys != nil && time.Now().Sub(p.cachedAt) < p.cacheDuration {
-		log.Print("Getting public keys from cache")
+		slog.Info("Getting public keys from cache")
 		p.mu.RLock()
 		defer p.mu.RUnlock()
 		return p.cachedPublicKeys, nil
@@ -157,8 +158,8 @@ func (p *provider) Get() (map[string]any, error) {
 		defer p.mu.Unlock()
 		if publicKeys, err := p.load(); err != nil {
 			if p.cachedPublicKeys != nil {
-				log.Printf("!!! %s", err)
-				log.Printf("Falling back to public keys cached at %s", p.cachedAt.Format(time.DateTime))
+				slog.Error(err.Error())
+				slog.Info(fmt.Sprintf("Falling back to public keys cached at %s", p.cachedAt.Format(time.DateTime)))
 				return p.cachedPublicKeys, nil
 			} else {
 				return nil, err

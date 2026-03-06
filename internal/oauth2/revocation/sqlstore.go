@@ -3,7 +3,8 @@ package revocation
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/blockloop/scan/v2"
@@ -27,7 +28,7 @@ func NewSqlStore(dbs map[string]*sql.DB, settings *StoreSettings) (Store, error)
 }
 
 func (s *sqlStore) Put(tokenID string, expirationTime time.Time) error {
-	log.Printf("SQL: %s; -- %s, %v", s.settings.Insert, tokenID, expirationTime)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s, %v", s.settings.Insert, tokenID, expirationTime))
 	// INSERT INTO token_revocation_list (jti, exp) VALUES ($1, $2) ON CONFLICT (jti) DO NOTHING
 	_, err := s.dbconn.Exec(s.settings.Insert, tokenID, expirationTime)
 	return err
@@ -36,7 +37,7 @@ func (s *sqlStore) Put(tokenID string, expirationTime time.Time) error {
 func (s *sqlStore) Lookup(tokenID string) (*RevokedToken, error) {
 	var revokedToken RevokedToken
 
-	log.Printf("SQL: %s; -- %s", s.settings.Query, tokenID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", s.settings.Query, tokenID))
 	// SELECT rvt, exp FROM token_revocation_list WHERE jti = $1 and exp >= current_timestamp
 	if rows, err := s.dbconn.Query(s.settings.Query, tokenID); err == nil {
 		if err := scan.RowStrict(&revokedToken, rows); err != nil {
@@ -46,7 +47,7 @@ func (s *sqlStore) Lookup(tokenID string) (*RevokedToken, error) {
 			return nil, err
 		}
 	} else {
-		log.Printf("!!! Query for token id failed: %v", err)
+		slog.Error(fmt.Sprintf("query for token id failed: %s", err.Error()))
 		return nil, err
 	}
 	return &revokedToken, nil

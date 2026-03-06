@@ -1,7 +1,8 @@
 package people
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -29,7 +30,7 @@ func (e inMemoryStore) Authenticate(userID, password string) (string, error) {
 
 	if foundUser {
 		if err := bcrypt.CompareHashAndPassword([]byte(authenticPerson.PasswordHash), []byte(password)); err != nil {
-			log.Printf("!!! password comparison failed: %v", err)
+			slog.Error(fmt.Sprintf("password comparison failed: %s", err.Error()))
 		} else {
 			return lowercaseUserID, nil
 		}

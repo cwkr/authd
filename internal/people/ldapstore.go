@@ -2,7 +2,7 @@ package people
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -99,7 +99,7 @@ func (p ldapStore) queryGroups(conn *ldap.Conn, userDN string) ([]string, error)
 
 	var groups []string
 
-	log.Printf("LDAP: %s; # %s", p.settings.GroupsQuery, userDN)
+	slog.Info(fmt.Sprintf("LDAP: %s; # %s", p.settings.GroupsQuery, userDN))
 	// (&(objectClass=groupOfUniqueNames)(uniquemember=%s))
 	var ldapGroupsSearch = ldap.NewSearchRequest(
 		p.baseDN,
@@ -131,7 +131,7 @@ func (p ldapStore) queryDetails(conn *ldap.Conn, userID string) (string, *Person
 	var person Person
 	var userDN string
 
-	log.Printf("LDAP: %s; # %s", p.settings.DetailsQuery, userID)
+	slog.Info(fmt.Sprintf("LDAP: %s; # %s", p.settings.DetailsQuery, userID))
 	// (&(objectClass=person)(uid=%s))
 	var ldapSearch = ldap.NewSearchRequest(
 		p.baseDN,
@@ -196,20 +196,20 @@ func (p ldapStore) Authenticate(userID, password string) (string, error) {
 
 	var conn, err = ldap.DialURL(p.ldapURL)
 	if err != nil {
-		log.Printf("!!! ldap connection error: %v", err)
+		slog.Error(fmt.Sprintf("ldap connection error: %s", err.Error()))
 		return "", err
 	}
 	defer conn.Close()
 
 	if p.bindUser != "" && p.bindPassword != "" {
 		if err = conn.Bind(p.bindUser, p.bindPassword); err != nil {
-			log.Printf("!!! ldap bind error: %v", err)
+			slog.Error(fmt.Sprintf("ldap bind error: %s", err.Error()))
 			return "", err
 		}
 	}
 
 	// (&(objectClass=person)(uid=%s))
-	log.Printf("LDAP: %s; # %s", p.settings.CredentialsQuery, userID)
+	slog.Info(fmt.Sprintf("LDAP: %s; # %s", p.settings.CredentialsQuery, userID))
 	var ldapSearch = ldap.NewSearchRequest(
 		p.baseDN,
 		ldap.ScopeWholeSubtree,
@@ -227,14 +227,13 @@ func (p ldapStore) Authenticate(userID, password string) (string, error) {
 			var entry = results.Entries[0]
 			if err = conn.Bind(entry.DN, password); err == nil {
 				return entry.GetEqualFoldAttributeValue(p.userIDAttr), nil
-			} else {
-				log.Printf("!!! authentication using ldap bind failed: %v", err)
 			}
+			slog.Error(fmt.Sprintf("authentication using ldap bind failed: %s", err.Error()))
 		} else {
-			log.Printf("!!! Person not found: %s", userID)
+			slog.Error(fmt.Sprintf("person not found: %s", userID))
 		}
 	} else {
-		log.Printf("!!! Query for person failed: %v", err)
+		slog.Error(fmt.Sprintf("query for person failed: %v", err.Error()))
 		return "", err
 	}
 
@@ -253,30 +252,30 @@ func (p ldapStore) Lookup(userID string) (*Person, error) {
 
 	conn, err = ldap.DialURL(p.ldapURL)
 	if err != nil {
-		log.Printf("!!! ldap connection error: %v", err)
+		slog.Error(fmt.Sprintf("ldap connection error: %s", err.Error()))
 		return nil, err
 	}
 	defer conn.Close()
 
 	if p.bindUser != "" && p.bindPassword != "" {
 		if err = conn.Bind(p.bindUser, p.bindPassword); err != nil {
-			log.Printf("!!! ldap bind error: %v", err)
+			slog.Error(fmt.Sprintf("ldap bind error: %s", err.Error()))
 			return nil, err
 		}
 	}
 
 	if userDN, person, err = p.queryDetails(conn, userID); err != nil {
-		log.Printf("!!! Query for details failed: %v", err)
+		slog.Error(fmt.Sprintf("query for details failed: %s", err.Error()))
 		return nil, err
 	}
 
 	if groups, err = p.queryGroups(conn, userDN); err != nil {
-		log.Printf("!!! Query for groups failed: %v", err)
+		slog.Error(fmt.Sprintf("query for groups failed: %s", err.Error()))
 		return nil, err
 	}
 	person.Groups = groups
 
-	log.Printf("%#v", *person)
+	slog.Debug(fmt.Sprintf("%#v", *person))
 	return person, nil
 }
 
@@ -295,18 +294,18 @@ func (p ldapStore) Put(userID string, person *Person) error {
 
 	conn, err = ldap.DialURL(p.ldapURL)
 	if err != nil {
-		log.Printf("!!! ldap connection error: %v", err)
+		slog.Error(fmt.Sprintf("ldap connection error: %s", err.Error()))
 		return err
 	}
 	defer conn.Close()
 
 	if err := conn.Bind(p.bindUser, p.bindPassword); err != nil {
-		log.Printf("!!! ldap bind error: %v", err)
+		slog.Error(fmt.Sprintf("ldap bind error: %s", err.Error()))
 		return err
 	}
 
 	if userDN, oldPerson, err = p.queryDetails(conn, userID); err != nil {
-		log.Printf("!!! Query for details failed: %v", err)
+		slog.Error(fmt.Sprintf("query for details failed: %s", err.Error()))
 		return err
 	}
 
@@ -476,13 +475,13 @@ func (p ldapStore) Put(userID string, person *Person) error {
 		changedAttributes = append(changedAttributes, change.Modification.Type)
 	}
 	if len(changedAttributes) > 0 {
-		log.Printf("LDAP: modify %s attributes: %s", userDN, strings.Join(changedAttributes, ", "))
+		slog.Info(fmt.Sprintf("LDAP: modify %s attributes: %s", userDN, strings.Join(changedAttributes, ", ")))
 		if err := conn.Modify(req); err != nil {
-			log.Printf("!!! ldap modify failed: %v", err)
+			slog.Error(fmt.Sprintf("ldap modify failed: %s", err.Error()))
 			return err
 		}
 	} else {
-		log.Printf("LDAP: no attributes modified of %s", userDN)
+		slog.Warn(fmt.Sprintf("LDAP: no attributes modified of %s", userDN))
 	}
 
 	return nil
@@ -498,25 +497,25 @@ func (p ldapStore) ChangePassword(userID, password string) error {
 
 	conn, err = ldap.DialURL(p.ldapURL)
 	if err != nil {
-		log.Printf("!!! ldap connection error: %v", err)
+		slog.Error(fmt.Sprintf("ldap connection error: %s", err.Error()))
 		return err
 	}
 	defer conn.Close()
 
 	if err := conn.Bind(p.bindUser, p.bindPassword); err != nil {
-		log.Printf("!!! ldap bind error: %v", err)
+		slog.Error(fmt.Sprintf("ldap bind error: %s", err.Error()))
 		return err
 	}
 
 	if userDN, _, err = p.queryDetails(conn, userID); err != nil {
-		log.Printf("!!! Query for details failed: %v", err)
+		slog.Error(fmt.Sprintf("query for details failed: %s", err.Error()))
 		return err
 	}
 
 	var req = ldap.NewPasswordModifyRequest(userDN, "", password)
-	log.Printf("LDAP: modify password for user: %s", userDN)
+	slog.Info(fmt.Sprintf("LDAP: modify password for user: %s", userDN))
 	if _, err := conn.PasswordModify(req); err != nil {
-		log.Printf("!!! ldap modify password failed: %v", err)
+		slog.Error(fmt.Sprintf("ldap modify password failed: %s", err.Error()))
 		return err
 	}
 

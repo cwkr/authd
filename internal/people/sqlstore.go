@@ -3,7 +3,8 @@ package people
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/blockloop/scan/v2"
@@ -67,7 +68,7 @@ func (p sqlStore) queryGroups(userID string) ([]string, error) {
 
 	var groups []string
 
-	log.Printf("SQL: %s; -- %s", p.settings.GroupsQuery, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", p.settings.GroupsQuery, userID))
 	// SELECT id FROM groups WHERE lower(user_id) = lower($1)
 	if rows, err := p.dbconn.Query(p.settings.GroupsQuery, userID); err == nil {
 		if err := scan.Rows(&groups, rows); err != nil {
@@ -82,7 +83,7 @@ func (p sqlStore) queryGroups(userID string) ([]string, error) {
 func (p sqlStore) queryDetails(userID string) (*Person, error) {
 	var personDetails PersonDetails
 
-	log.Printf("SQL: %s; -- %s", p.settings.DetailsQuery, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", p.settings.DetailsQuery, userID))
 	// SELECT given_name, family_name, email, TO_CHAR(birthdate, 'YYYY-MM-DD') birthdate, department,
 	// phone_number, room_number, street_address, locality, postal_code
 	// FROM people WHERE lower(user_id) = lower($1)
@@ -106,18 +107,18 @@ func (p sqlStore) Authenticate(userID, password string) (string, error) {
 	}
 
 	// SELECT user_id, password_hash FROM people WHERE lower(user_id) = lower($1)
-	log.Printf("SQL: %s; -- %s", p.settings.CredentialsQuery, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", p.settings.CredentialsQuery, userID))
 	var row = p.dbconn.QueryRow(p.settings.CredentialsQuery, userID)
 	var passwordHash string
 	if err := row.Scan(&realUserID, &passwordHash); err == nil {
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-			log.Printf("!!! password comparison failed: %v", err)
+			slog.Error(fmt.Sprintf("password comparison failed: %s", err.Error()))
 		} else {
 			return realUserID, nil
 		}
 	} else {
-		log.Printf("!!! Query for person failed: %v", err)
-		if err != sql.ErrNoRows {
+		slog.Error(fmt.Sprintf("query for person failed: %s", err.Error()))
+		if !errors.Is(err, sql.ErrNoRows) {
 			return "", err
 		}
 	}
@@ -134,17 +135,17 @@ func (p sqlStore) Lookup(userID string) (*Person, error) {
 	var groups []string
 
 	if person, err = p.queryDetails(userID); err != nil {
-		log.Printf("!!! Query for details failed: %v", err)
+		slog.Error(fmt.Sprintf("query for details failed: %s", err.Error()))
 		return nil, err
 	}
 
 	if groups, err = p.queryGroups(userID); err != nil {
-		log.Printf("!!! Query for groups failed: %v", err)
+		slog.Error(fmt.Sprintf("query for groups failed: %s", err.Error()))
 		return nil, err
 	}
 	person.Groups = groups
 
-	log.Printf("%#v", *person)
+	slog.Debug(fmt.Sprintf("%#v", *person))
 	return person, nil
 }
 
@@ -165,12 +166,12 @@ func (p sqlStore) Put(userID string, person *Person) error {
 	// UPDATE people SET given_name = $2, family_name = $3, email = $4, department = $5,
 	// birthdate = TO_DATE($6, 'YYYY-MM-DD'), phone_number = $7, room_number = $8, street_address = $9, locality = $10,
 	// postal_code = $11, last_modified = now() WHERE lower(user_id) = lower($1)
-	log.Printf(
+	slog.Info(fmt.Sprintf(
 		"SQL: %s; -- %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
 		p.settings.Update, userID, person.GivenName, person.FamilyName, person.Email, person.Department,
 		person.Birthdate, person.PhoneNumber, person.RoomNumber,
 		person.StreetAddress, person.Locality, person.PostalCode,
-	)
+	))
 	if _, err := p.dbconn.Exec(
 		p.settings.Update,
 		userID,
@@ -195,7 +196,7 @@ func (p sqlStore) ChangePassword(userID, password string) error {
 		return err
 	} else {
 		// UPDATE people SET password_hash = $2, last_modified = now() WHERE lower(user_id) = lower($1)
-		log.Printf("SQL: %s; -- %s", p.settings.ChangePasswordQuery, userID)
+		slog.Info(fmt.Sprintf("SQL: %s; -- %s", p.settings.ChangePasswordQuery, userID))
 		if _, err := p.dbconn.Exec(p.settings.ChangePasswordQuery, userID, passwordHash); err != nil {
 			return err
 		}

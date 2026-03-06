@@ -3,12 +3,11 @@ package oauth2
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/people"
@@ -40,7 +39,7 @@ type authorizeHandler struct {
 }
 
 func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		timing          = httputil.NewTiming()
@@ -56,25 +55,24 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if stringutil.IsAnyEmpty(responseType, clientID, redirectURI) {
-		htmlutil.Error(w, a.basePath, "client_id, redirect_uri and response_type parameters are required", http.StatusBadRequest)
+		httputil.PlainError(w, "client_id, redirect_uri and response_type parameters are required", http.StatusBadRequest)
 		return
 	}
 
 	var client clients.Client
 	if c, err := a.clientStore.Lookup(clientID); err != nil {
-		log.Printf("!!! %s", err)
-		htmlutil.Error(w, a.basePath, ErrorInvalidClient, http.StatusUnauthorized)
+		httputil.PlainError(w, ErrorInvalidClient, http.StatusUnauthorized)
 		return
 	} else {
 		if responseType == ResponseTypeToken && client.DisableImplicit {
-			htmlutil.Error(w, a.basePath, ErrorUnsupportedGrantType, http.StatusBadRequest)
+			httputil.PlainError(w, ErrorUnsupportedGrantType, http.StatusBadRequest)
 			return
 		}
 		client = *c
 	}
 
 	if !strings.HasPrefix(redirectURI, strings.TrimRight(a.issuer, "/")) && !client.MatchesRedirectURI(redirectURI) {
-		htmlutil.Error(w, a.basePath, ErrorRedirectURIMismatch, http.StatusBadRequest)
+		httputil.PlainError(w, ErrorRedirectURIMismatch, http.StatusBadRequest)
 		return
 	}
 
@@ -83,7 +81,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if person, err := a.peopleStore.Lookup(uid); err == nil {
 			user = User{UserID: uid, Person: *person}
 		} else {
-			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		timing.Stop("store")
@@ -103,7 +101,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Start("jwtgen")
 		var accessToken, lifetime, err = a.tokenService.GenerateAccessToken(user, client, user.UserID, clientID, IntersectScope(a.scope, scope))
 		if err != nil {
-			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		timing.Stop("jwtgen")
@@ -117,7 +115,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case ResponseTypeCode:
 		if challengeMethod != "" {
 			if challenge == "" || challengeMethod != "S256" {
-				htmlutil.Error(w, a.basePath, "code_challenge and code_challenge_method=S256 required for PKCE", http.StatusInternalServerError)
+				httputil.PlainError(w, "code_challenge and code_challenge_method=S256 required for PKCE", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -125,7 +123,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Start("jwtgen")
 		var authCode, err = a.tokenService.GenerateAuthCode(client, user.UserID, clientID, IntersectScope(a.scope, scope), challenge, nonce)
 		if err != nil {
-			htmlutil.Error(w, a.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		timing.Stop("jwtgen")
@@ -135,7 +133,7 @@ func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Report(w)
 		httputil.RedirectQuery(w, r, redirectURI, redirectParams)
 	default:
-		htmlutil.Error(w, a.basePath, ErrorUnsupportedGrantType, http.StatusBadRequest)
+		httputil.PlainError(w, ErrorUnsupportedGrantType, http.StatusBadRequest)
 	}
 }
 

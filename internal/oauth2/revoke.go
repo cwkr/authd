@@ -2,7 +2,8 @@ package oauth2
 
 import (
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -20,7 +21,7 @@ type revokeHandler struct {
 }
 
 func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodPost, http.MethodOptions}, false)
 
@@ -42,8 +43,8 @@ func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// debug output of parameters
-	log.Printf("client_id=%q client_secret=%q token_type_hint=%q token=%q",
-		clientID, strings.Repeat("*", utf8.RuneCountInString(clientSecret)), tokenTypeHint, token)
+	slog.Info(fmt.Sprintf("client_id=%q client_secret=%q token_type_hint=%q token=%q",
+		clientID, strings.Repeat("*", utf8.RuneCountInString(clientSecret)), tokenTypeHint, token))
 
 	if clientSecret != "" {
 		if _, err := j.clientStore.Authenticate(clientID, clientSecret); err != nil {
@@ -79,12 +80,12 @@ func (j *revokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := j.revocationStore.Put(claims.TokenID, claims.Expiry.Time()); err != nil {
-			log.Printf("!!! %s", err)
+			slog.Error(err.Error())
 			Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
-		log.Printf("!!! Token already invalid: %s", err)
+		slog.Error(fmt.Sprintf("token already invalid: %s", err.Error()))
 	}
 
 	w.WriteHeader(http.StatusNoContent)

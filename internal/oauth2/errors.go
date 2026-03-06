@@ -2,6 +2,8 @@ package oauth2
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cwkr/authd/internal/httputil"
@@ -39,10 +41,14 @@ const (
 )
 
 func Error(w http.ResponseWriter, error string, description string, code int) {
+	var statusText = http.StatusText(code)
+	if code < 500 {
+		slog.Warn(fmt.Sprintf("%d %s: %s", code, statusText, error))
+	} else {
+		slog.Error(fmt.Sprintf("%d %s: %s", code, statusText, error))
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	httputil.NoCache(w)
-
 	w.WriteHeader(code)
 	var bytes, _ = json.Marshal(ErrorResponse{error, description})
 	w.Write(bytes)

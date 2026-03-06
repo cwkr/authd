@@ -1,10 +1,11 @@
-package server
+package api
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -18,10 +19,10 @@ import (
 
 const ErrorUnsupportedMediaType = "unsupported_media_type"
 
-type peopleAPIHandler struct {
-	peopleStore    people.Store
-	customVersions map[string]settings.CustomPeopleAPI
-	roleMappings   oauth2.RoleMappings
+type lookupPersonHandler struct {
+	peopleStore  people.Store
+	customAPI    *settings.CustomPeopleAPI
+	roleMappings oauth2.RoleMappings
 }
 
 type personWithRoles struct {
@@ -40,8 +41,8 @@ func cleanup(slice []string) []string {
 	return newSlice
 }
 
-func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+func (p *lookupPersonHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions, http.MethodPut}, true)
 
@@ -57,22 +58,16 @@ func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var pathVars = mux.Vars(r)
-	var apiVersion = strings.TrimSpace(pathVars["version"])
-
 	var userID = strings.TrimSpace(pathVars["user_id"])
-	if userID == "" {
-		oauth2.Error(w, oauth2.ErrorInvalidRequest, "user_id must not be blank", http.StatusBadRequest)
-		return
-	}
 
 	if person, err := p.peopleStore.Lookup(userID); err == nil {
 		var user = oauth2.User{UserID: userID, Person: *person}
 		var bytes []byte
 		var err error
-		if customVersion, found := p.customVersions[apiVersion]; found {
+		if p.customAPI != nil {
 			var claims = make(map[string]any)
-			oauth2.AddExtraClaims(claims, customVersion.Attributes, user, subject, "", p.roleMappings)
-			if filterParamName := strings.TrimSpace(customVersion.FilterParam); filterParamName != "" {
+			oauth2.AddExtraClaims(claims, p.customAPI.Attributes, user, subject, "", p.roleMappings)
+			if filterParamName := strings.TrimSpace(p.customAPI.FilterParam); filterParamName != "" {
 				var attrsToFetch = cleanup(strings.Split(strings.Join(r.URL.Query()[filterParamName], ","), ","))
 				if len(attrsToFetch) > 0 {
 					for key, _ := range claims {
@@ -82,47 +77,39 @@ func (p *peopleAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			oauth2.AddExtraClaims(claims, customVersion.FixedAttributes, user, subject, "", p.roleMappings)
+			oauth2.AddExtraClaims(claims, p.customAPI.FixedAttributes, user, subject, "", p.roleMappings)
 			bytes, err = json.Marshal(claims)
-		} else if apiVersion == "v1" {
-			bytes, err = json.Marshal(personWithRoles{Person: *person, Roles: p.roleMappings.Roles(user)})
 		} else {
-			log.Print("!!! 400 Bad Request - unsupported version")
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "unsupported version", http.StatusBadRequest)
-			return
+			bytes, err = json.Marshal(personWithRoles{Person: *person, Roles: p.roleMappings.Roles(user)})
 		}
 		if err != nil {
-			log.Printf("!!! %v", err)
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
 		httputil.NoCache(w)
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Write(bytes)
 	} else {
 		if errors.Is(err, people.ErrPersonNotFound) {
-			log.Printf("!!! 404 Not Found - %v", err)
-			oauth2.Error(w, oauth2.ErrorNotFound, err.Error(), http.StatusNotFound)
+			Problem(w, http.StatusNotFound, err.Error())
 		} else {
-			log.Printf("!!! %v", err)
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 		}
 	}
 }
 
-func LookupPersonHandler(peopleStore people.Store, customVersions map[string]settings.CustomPeopleAPI, roleMappings oauth2.RoleMappings) http.Handler {
-	return &peopleAPIHandler{
-		peopleStore:    peopleStore,
-		customVersions: customVersions,
-		roleMappings:   roleMappings,
+func LookupPersonHandler(peopleStore people.Store, customAPI *settings.CustomPeopleAPI, roleMappings oauth2.RoleMappings) http.Handler {
+	return &lookupPersonHandler{
+		peopleStore:  peopleStore,
+		customAPI:    customAPI,
+		roleMappings: roleMappings,
 	}
 }
 
 func PutPersonHandler(peopleStore people.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions, http.MethodPut}, true)
 
@@ -146,7 +133,6 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 		var userID = mux.Vars(r)["user_id"]
 
 		if err := peopleStore.Put(userID, &person); err != nil {
-			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -156,7 +142,7 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 
 func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodPut}, true)
 
@@ -194,7 +180,6 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 		var userID = mux.Vars(r)["user_id"]
 
 		if err := peopleStore.ChangePassword(userID, newPassword); err != nil {
-			log.Printf("!!! Update failed: %v", err)
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
 			return
 		}

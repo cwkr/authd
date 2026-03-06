@@ -1,7 +1,8 @@
 package oauth2
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -41,14 +42,14 @@ func (c RoleMappings) Roles(user User) []string {
 			for _, groupDN := range mapping.ByGroupDN {
 				var wantedDN *ldap.DN
 				if dn, err := ldap.ParseDN(groupDN); err != nil {
-					log.Print(err)
+					slog.Error(err.Error())
 					break
 				} else {
 					wantedDN = dn
 				}
 				for _, group := range user.Groups {
 					if dn, err := ldap.ParseDN(group); err != nil {
-						log.Print(err)
+						slog.Error(err.Error())
 						continue
 					} else {
 						if dn.EqualFold(wantedDN) {
@@ -83,7 +84,7 @@ func (c RoleMappings) Roles(user User) []string {
 			}
 		}
 	}
-	log.Printf("user: %s, mapped roles: %s", user.UserID, strings.Join(roles, ", "))
+	slog.Debug(fmt.Sprintf("user: %s, mapped roles: %s", user.UserID, strings.Join(roles, ", ")))
 	return roles
 }
 
@@ -107,6 +108,6 @@ func (c RoleMappings) ClientRoles(clientID string) []string {
 		}
 	}
 
-	log.Printf("client: %s, mapped roles: %s", clientID, strings.Join(roles, ", "))
+	slog.Debug(fmt.Sprintf("client: %s, mapped roles: %s", clientID, strings.Join(roles, ", ")))
 	return roles
 }

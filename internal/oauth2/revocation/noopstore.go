@@ -1,7 +1,8 @@
 package revocation
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -13,7 +14,7 @@ func NewNoopStore() Store {
 }
 
 func (s *noopStore) Put(tokenID string, expirationTime time.Time) error {
-	log.Printf("token %s revoked", tokenID)
+	slog.Info(fmt.Sprintf("token %s revoked", tokenID))
 	return nil
 }
 

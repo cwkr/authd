@@ -2,10 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/people"
-	"log"
-	"net/http"
 )
 
 type healthHandler struct {
@@ -22,8 +24,8 @@ func (i *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := i.peopleStore.Ping(); err != nil {
-		log.Printf("%s %s", r.Method, r.URL)
-		log.Printf("!!! 503 Service Unavailable - %s", err.Error())
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
+		slog.Error(fmt.Sprintf("503 Service Unavailable: %s", err.Error()))
 		status.Status = err.Error()
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}

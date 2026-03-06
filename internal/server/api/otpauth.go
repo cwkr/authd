@@ -1,16 +1,16 @@
-package server
+package api
 
 import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/cwkr/authd/internal/httputil"
-	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/gorilla/mux"
@@ -18,7 +18,7 @@ import (
 
 func LookupOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
 
@@ -33,8 +33,8 @@ func LookupOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 		)
 
 		if kw, err := otpauthStore.Lookup(userID); err != nil {
-			if !errors.Is(otpauth.ErrNotFound, err) {
-				oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			if !errors.Is(err, otpauth.ErrNotFound) {
+				Problem(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 		} else {
@@ -54,7 +54,7 @@ func LookupOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 		}
 
 		if bytes, err := json.Marshal(responseMap); err != nil {
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -65,7 +65,7 @@ func LookupOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 
 func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
 
@@ -76,9 +76,9 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 
 		if kw, err := otpauthStore.Lookup(userID); err != nil {
 			if errors.Is(otpauth.ErrNotFound, err) {
-				oauth2.Error(w, "not_enabled", "", http.StatusConflict)
+				Problem(w, http.StatusConflict, "OTPAuth not enabled")
 			} else {
-				oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+				Problem(w, http.StatusInternalServerError, err.Error())
 			}
 			return
 		} else {
@@ -92,11 +92,11 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 
 			if bytes, err := io.ReadAll(r.Body); err == nil {
 				if err := json.Unmarshal(bytes, &requestMap); err != nil {
-					oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+					Problem(w, http.StatusBadRequest, err.Error())
 					return
 				}
 			} else {
-				oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+				Problem(w, http.StatusBadRequest, err.Error())
 				return
 			}
 
@@ -106,7 +106,7 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 		}
 
 		if code == "" {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "code required", http.StatusBadRequest)
+			Problem(w, http.StatusBadRequest, "code required")
 			return
 		}
 
@@ -115,7 +115,7 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 		}
 
 		if bytes, err := json.Marshal(responseMap); err != nil {
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -136,7 +136,7 @@ type OTPAuthDetails struct {
 
 func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
 
@@ -148,13 +148,13 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 		)
 
 		if !httputil.IsJSON(r.Header.Get("Content-Type")) {
-			oauth2.Error(w, ErrorUnsupportedMediaType, "", http.StatusUnsupportedMediaType)
+			Problem(w, http.StatusUnsupportedMediaType, "json required")
 			return
 		}
 
 		if recoveryCodeBase64 := r.Header.Get("X-Recovery-Code"); recoveryCodeBase64 != "" {
 			if recoveryCodeBytes, err := base64.StdEncoding.DecodeString(recoveryCodeBase64); err != nil {
-				oauth2.Error(w, oauth2.ErrorInvalidRequest, "recovery code must be base64 encoded", http.StatusBadRequest)
+				Problem(w, http.StatusBadRequest, "recovery code must be base64 encoded")
 				return
 			} else {
 				recoveryCode = strings.ToUpper(stringutil.StripSpaces(string(recoveryCodeBytes)))
@@ -163,7 +163,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 
 		if kw, err := otpauthStore.Lookup(userID); err != nil {
 			if !errors.Is(otpauth.ErrNotFound, err) {
-				oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+				Problem(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 		} else {
@@ -171,12 +171,12 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 		}
 
 		if self && keyWrapper != nil && recoveryCode == "" {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "x-recovery-code header required", http.StatusBadRequest)
+			Problem(w, http.StatusBadRequest, "x-recovery-code header required")
 			return
 		}
 
 		if recoveryCode != "" && keyWrapper != nil && !otpauthStore.VerifyRecoveryCode(userID, recoveryCode) {
-			oauth2.Error(w, "not_allowed", "wrong recovery code", http.StatusForbidden)
+			Problem(w, http.StatusForbidden, "invalid recovery code")
 			return
 		}
 
@@ -184,11 +184,11 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 
 		if bytes, err := io.ReadAll(r.Body); err == nil {
 			if err := json.Unmarshal(bytes, &otpAuthDetails); err != nil {
-				oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+				Problem(w, http.StatusBadRequest, err.Error())
 				return
 			}
 		} else {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+			Problem(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -203,14 +203,14 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 
 		if otpauthURI := strings.TrimSpace(otpAuthDetails.OTPAuthURI); otpauthURI != "" {
 			if kw, err := otpauth.NewKeyWrapperFromURI(otpauthURI); err != nil {
-				oauth2.Error(w, oauth2.ErrorInvalidRequest, err.Error(), http.StatusBadRequest)
+				Problem(w, http.StatusBadRequest, err.Error())
 				return
 			} else {
 				keyWrapper = kw
 			}
 		} else {
 			if kw, err := otpauth.NewKeyWrapper(issuer, userID, algorithm, otpAuthDetails.Secret, digits); err != nil {
-				oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+				Problem(w, http.StatusInternalServerError, err.Error())
 				return
 			} else {
 				keyWrapper = kw
@@ -218,7 +218,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 		}
 
 		if recoveryCode, err := otpauthStore.Put(userID, *keyWrapper); err != nil {
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 			return
 		} else {
 			otpAuthDetails.Secret = keyWrapper.Secret()
@@ -229,7 +229,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 			otpAuthDetails.Digits = keyWrapper.Digits()
 			otpAuthDetails.Type = "totp"
 			if b, err := json.Marshal(otpAuthDetails); err != nil {
-				oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+				Problem(w, http.StatusInternalServerError, err.Error())
 			} else {
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(b)
@@ -240,7 +240,7 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 
 func ResetOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 		httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodGet, http.MethodPost, http.MethodDelete}, true)
 
@@ -252,7 +252,7 @@ func ResetOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 
 		if recoveryCodeBase64 := r.Header.Get("X-Recovery-Code"); recoveryCodeBase64 != "" {
 			if recoveryCodeBytes, err := base64.StdEncoding.DecodeString(recoveryCodeBase64); err != nil {
-				oauth2.Error(w, oauth2.ErrorInvalidRequest, "recovery code must be base64 encoded", http.StatusBadRequest)
+				Problem(w, http.StatusBadRequest, "recovery code must be base64 encoded")
 				return
 			} else {
 				recoveryCode = strings.ToUpper(stringutil.StripSpaces(string(recoveryCodeBytes)))
@@ -260,17 +260,17 @@ func ResetOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 		}
 
 		if self && recoveryCode == "" {
-			oauth2.Error(w, oauth2.ErrorInvalidRequest, "x-recovery-code header required", http.StatusBadRequest)
+			Problem(w, http.StatusBadRequest, "x-recovery-code header required")
 			return
 		}
 
 		if recoveryCode != "" && !otpauthStore.VerifyRecoveryCode(userID, recoveryCode) {
-			oauth2.Error(w, "not_allowed", "wrong recovery code", http.StatusForbidden)
+			Problem(w, http.StatusForbidden, "invalid recovery code")
 			return
 		}
 
 		if err := otpauthStore.Delete(userID); err != nil {
-			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
+			Problem(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 

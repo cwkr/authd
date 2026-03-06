@@ -5,14 +5,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/otpauth"
@@ -45,7 +44,7 @@ type loginHandler struct {
 }
 
 func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		message, userID, password, clientID, code string
@@ -55,7 +54,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	clientID = strings.ToLower(r.FormValue("client_id"))
 	if clientID == "" {
-		htmlutil.Error(w, j.basePath, "client_id parameter is required", http.StatusBadRequest)
+		httputil.PlainError(w, "client_id parameter is required", http.StatusBadRequest)
 		return
 	}
 
@@ -63,7 +62,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if c, err := j.clientStore.Lookup(clientID); err == nil {
 		client = *c
 	} else {
-		htmlutil.Error(w, j.basePath, "invalid_client", http.StatusForbidden)
+		httputil.PlainError(w, "invalid_client", http.StatusForbidden)
 		return
 	}
 
@@ -92,7 +91,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		code = stringutil.StripSpaces(r.PostFormValue("code"))
 
 		// debug output of parameters
-		log.Printf("user_id=%q password=%q code=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), strings.Repeat("*", utf8.RuneCountInString(code)))
+		slog.Info(fmt.Sprintf("user_id=%q password=%q code=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), strings.Repeat("*", utf8.RuneCountInString(code))))
 
 		if !sessionActive {
 			if stringutil.IsAnyEmpty(userID, password) {
@@ -101,7 +100,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if realUserID, err := j.peopleStore.Authenticate(userID, password); err == nil {
 					var codeRequired = require2FA || kw != nil
 					if err := j.sessionManager.CreateSession(r, w, realUserID, !codeRequired); err != nil {
-						htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
+						httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
 					sessionActive = true
@@ -180,7 +179,7 @@ func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"password_reset_enabled": j.passwordResetEnabled,
 	})
 	if err != nil {
-		htmlutil.Error(w, j.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 

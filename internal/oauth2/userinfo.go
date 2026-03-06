@@ -2,7 +2,8 @@ package oauth2
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cwkr/authd/internal/httputil"
@@ -16,7 +17,7 @@ type userinfoHandler struct {
 }
 
 func (u *userinfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, true)
 

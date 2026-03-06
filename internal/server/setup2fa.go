@@ -5,14 +5,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/otpauth"
@@ -43,18 +42,18 @@ type setup2FAHandler struct {
 }
 
 func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var clientID = strings.TrimSpace(r.FormValue("client_id"))
 
 	if stringutil.IsAnyEmpty(clientID) {
-		htmlutil.Error(w, o.basePath, "client_id parameter is required", http.StatusBadRequest)
+		httputil.PlainError(w, "client_id parameter is required", http.StatusBadRequest)
 		return
 	}
 
 	var client clients.Client
 	if c, err := o.clientStore.Lookup(clientID); err != nil {
-		htmlutil.Error(w, o.basePath, "client not found", http.StatusForbidden)
+		httputil.PlainError(w, "client not found", http.StatusForbidden)
 		return
 	} else {
 		client = *c
@@ -109,7 +108,7 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						} else {
 							if !verified {
 								if err := o.sessionManager.VerifySession(r, w); err != nil {
-									htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+									httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 									return
 								}
 							}
@@ -131,18 +130,18 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else if enabled && recoveryCode != "" {
 				if o.otpauthStore.VerifyRecoveryCode(uid, recoveryCode) {
 					if err := o.otpauthStore.Delete(uid); err != nil {
-						htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+						httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
 					if !require2FA && !verified {
 						if err := o.sessionManager.VerifySession(r, w); err != nil {
-							htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+							httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 							return
 						}
 					}
 					if redirectURI != "" {
 						if !strings.HasPrefix(redirectURI, strings.TrimRight(o.issuer, "/")) && !client.MatchesRedirectURI(redirectURI) {
-							htmlutil.Error(w, o.basePath, "post_setup_redirect_uri mismatch", http.StatusBadRequest)
+							httputil.PlainError(w, "post_setup_redirect_uri mismatch", http.StatusBadRequest)
 							return
 						}
 						http.Redirect(w, r, redirectURI, http.StatusFound)
@@ -168,14 +167,14 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if keyWrapper == nil {
 			if kw, err := otpauth.NewKeyWrapper(o.issuer, uid, algorithm, secret, digits); err != nil {
-				htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+				httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 				return
 			} else {
 				keyWrapper = kw
 			}
 		}
 		if dataURL, err := keyWrapper.PNG(); err != nil {
-			htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 			return
 		} else {
 			imageURL = dataURL
@@ -196,11 +195,11 @@ func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"generated_recovery_code":     generatedRecoveryCode,
 			"post_setup_continuation_uri": postSetupContinuationURI,
 		}); err != nil {
-			htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
-		htmlutil.Error(w, o.basePath, "not logged in", http.StatusUnauthorized)
+		httputil.PlainError(w, "not logged in", http.StatusUnauthorized)
 		return
 	}
 }

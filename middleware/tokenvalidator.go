@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"errors"
+	"log/slog"
+	"strings"
+	"time"
+
 	"github.com/cwkr/authd/internal/maputil"
 	"github.com/cwkr/authd/keyset"
 	"github.com/go-jose/go-jose/v3/jwt"
-	"log"
-	"strings"
-	"time"
 )
 
 var (
@@ -36,7 +37,7 @@ func (t accessTokenValidator) Validate(rawToken string, audiences ...string) (st
 	}
 	var token, err = jwt.ParseSigned(rawToken)
 	if err != nil {
-		log.Printf("!!! %s", err)
+		slog.Error(err.Error())
 		return "", err
 	}
 	if len(token.Headers) == 0 || token.Headers[0].KeyID == "" {
@@ -48,7 +49,7 @@ func (t accessTokenValidator) Validate(rawToken string, audiences ...string) (st
 	}
 	var claims = jwt.Claims{}
 	if err := token.Claims(publicKey, &claims); err != nil {
-		log.Printf("!!! %s", err)
+		slog.Error(err.Error())
 		return "", err
 	}
 	err = claims.ValidateWithLeeway(jwt.Expected{
@@ -56,7 +57,7 @@ func (t accessTokenValidator) Validate(rawToken string, audiences ...string) (st
 		Audience: audiences,
 	}, 0)
 	if err != nil {
-		log.Printf("!!! %s", err)
+		slog.Error(err.Error())
 		return "", err
 	} else {
 		return claims.Subject, nil

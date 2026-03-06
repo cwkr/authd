@@ -4,12 +4,12 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/cwkr/authd/internal/htmlutil"
+	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/people"
@@ -55,7 +55,7 @@ type resetPasswdHandler struct {
 }
 
 func (o *resetPasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		errorMessage   string
@@ -70,22 +70,22 @@ func (o *resetPasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			if person, err := o.peopleStore.Lookup(userID); err == nil {
 				if !o.peopleStore.ReadOnly() && person.Email != "" {
-					log.Printf("Sending mail with password reset link for user %s to %s", userID, person.Email)
+					slog.Info(fmt.Sprintf("Sending mail with password reset link for user %s to %s", userID, person.Email))
 					if token, err := o.tokenCreator.GeneratePasswordResetToken(userID); err == nil {
 						var msg strings.Builder
 						if err := o.mailTpl.ExecuteTemplate(&msg, "mail", map[string]any{
 							"link": template.URL(fmt.Sprintf("%s/chpasswd/%s", strings.TrimSuffix(o.issuer, "/"), token)),
 						}); err != nil {
-							htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+							httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 							return
 						}
 						if err := o.mailer.SendMail(person.Email, "Reset Password", msg.String()); err != nil {
-							log.Printf("!!! %s", err)
+							slog.Error(err.Error())
 						}
 					}
 				}
 			} else {
-				log.Printf("!!! %s", err)
+				slog.Error(err.Error())
 			}
 			successMessage = "You will receive an email shortly if the user exists"
 		}
@@ -98,7 +98,7 @@ func (o *resetPasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"base_path":       o.basePath,
 		"version":         o.version,
 	}); err != nil {
-		htmlutil.Error(w, o.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

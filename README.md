@@ -49,8 +49,6 @@ and will load it's content when found.
   "additional_keys_lifetime": 900,
   // disable REST API completely 
   "disable_api": false,
-  // require JWT to query people details with REST API
-  "people_api_require_authn": true,
   "users": {
     "user": {
       "given_name": "First Name",
@@ -304,6 +302,17 @@ Client column names are mapped case-sensitive by name:
   // define custom id token claims
   "custom_id_token_claims": {
     "groups": "$groups"
+  },
+  "custom_people_api": {
+    "/oic_rest/people": {
+      "require_authn": true,
+      "attributes": {
+        "email": "$email",
+        "givenName": "$given_name",
+        "sn": "$family_name",
+        "user_id": "$user_id"
+      }
+    }
   }
 }
 ```

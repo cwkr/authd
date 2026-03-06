@@ -1,7 +1,8 @@
 package clients
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ func (c Client) MatchesRedirectURI(requestedURI string) bool {
 			match = strings.TrimSuffix(requestedURI, "/") == strings.TrimSuffix(redirectURI, "/")
 		}
 		if match {
-			log.Printf("RequestedURI: %s ~= RedirectURI: %s", requestedURI, redirectURI)
+			slog.Info(fmt.Sprintf("RequestedURI: %s ~= RedirectURI: %s", requestedURI, redirectURI))
 			return true
 		}
 	}

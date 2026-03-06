@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,8 +13,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/cwkr/authd/internal/assets"
 	"github.com/cwkr/authd/internal/fileutil"
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/maputil"
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/oauth2/clients"
@@ -22,6 +22,7 @@ import (
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/server"
+	"github.com/cwkr/authd/internal/server/api"
 	"github.com/cwkr/authd/internal/server/session"
 	"github.com/cwkr/authd/internal/sqlutil"
 	"github.com/cwkr/authd/mail"
@@ -65,8 +66,6 @@ func main() {
 		setPort              int
 	)
 
-	log.SetOutput(os.Stdout)
-
 	flag.StringVar(&configFilename, "config", "", "config file name")
 	flag.StringVar(&setClientID, "client-id", "", "set client id")
 	flag.StringVar(&setClientSecret, "client-secret", "", "set client secret")
@@ -90,7 +89,7 @@ func main() {
 		fmt.Println(version)
 		os.Exit(0)
 	} else {
-		log.Printf("Starting Auth Server %s built with %s", version, runtime.Version())
+		slog.Info(fmt.Sprintf("Starting Auth Server %s built with %s", version, runtime.Version()))
 	}
 
 	// Set defaults
@@ -99,81 +98,97 @@ func main() {
 	settingsFilename = fileutil.ProbeSettingsFilename(configFilename)
 
 	if fileutil.FileExists(settingsFilename) {
-		log.Printf("Loading settings from %s", settingsFilename)
+		slog.Info(fmt.Sprintf("Loading settings from %s", settingsFilename))
 		if bytes, err := os.ReadFile(settingsFilename); err == nil {
 			options := hjson.DefaultDecoderOptions()
 			options.DisallowUnknownFields = true
 			options.DisallowDuplicateKeys = true
 			if err := hjson.UnmarshalWithOptions(bytes, serverSettings, options); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			}
 		} else {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
+	if serverSettings.Debug {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	} else {
+		slog.SetLogLoggerLevel(slog.LevelInfo)
+	}
+
 	if serverSettings.Key == "" {
-		log.Printf("Generating %d bit RSA key with ID %q", keySize, keyID)
+		slog.Info(fmt.Sprintf("Generating %d bit RSA key with ID %q", keySize, keyID))
 		if err := serverSettings.GenerateSigningKey(keySize, keyID); err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if err := serverSettings.LoadKeys(filepath.Dir(settingsFilename)); err != nil {
-		log.Fatalf("!!! %s", err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	if serverSettings.LoginTemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.LoginTemplate, "@"))
-		log.Printf("Loading login form template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading login form template from %s", filename))
 		err = server.LoadLoginTemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if serverSettings.LogoutTemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.LogoutTemplate, "@"))
-		log.Printf("Loading logout template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading logout template from %s", filename))
 		err = server.LoadLogoutTemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if serverSettings.Setup2FATemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.Setup2FATemplate, "@"))
-		log.Printf("Loading setup 2FA template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading setup 2FA template from %s", filename))
 		err = server.LoadSetup2FATemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if serverSettings.ResetPasswordTemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.ResetPasswordTemplate, "@"))
-		log.Printf("Loading password reset template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading password reset template from %s", filename))
 		err = server.LoadResetPasswdTemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if serverSettings.ChangePasswordTemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.ChangePasswordTemplate, "@"))
-		log.Printf("Loading change password template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading change password template from %s", filename))
 		err = server.LoadChangePasswdTemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if serverSettings.PasswordResetMailTemplate != "" {
 		var filename = filepath.Join(filepath.Dir(settingsFilename), strings.TrimPrefix(serverSettings.PasswordResetMailTemplate, "@"))
-		log.Printf("Loading password reset mail template from %s", filename)
+		slog.Info(fmt.Sprintf("Loading password reset mail template from %s", filename))
 		err = server.LoadPasswordResetMailTemplate(filename)
 		if err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
@@ -184,7 +199,8 @@ func main() {
 		var client = serverSettings.Clients[setClientID]
 		if setClientSecret != "" {
 			if secretHash, err := bcrypt.GenerateFromPassword([]byte(setClientSecret), 5); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			} else {
 				client.SecretHash = string(secretHash)
 			}
@@ -199,7 +215,8 @@ func main() {
 		var user = serverSettings.Users[setUserID]
 		if setPassword != "" {
 			if passwordHash, err := bcrypt.GenerateFromPassword([]byte(setPassword), 5); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			} else {
 				user.PasswordHash = string(passwordHash)
 			}
@@ -217,11 +234,13 @@ func main() {
 			user.Department = setDepartment
 		}
 		if user.PasswordHash == "" {
-			log.Fatal("!!! missing password")
+			slog.Error("missing password")
+			os.Exit(1)
 		}
 		if generateTOTPSecret {
 			if kw, err := otpauth.NewKeyWrapper(serverSettings.Issuer, setUserID, totpAlgorithm, "", totpDigits); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			} else {
 				user.OTPAuthURI = kw.URI()
 			}
@@ -234,7 +253,7 @@ func main() {
 	}
 
 	if saveSettings {
-		log.Printf("Saving settings to %s", settingsFilename)
+		slog.Info(fmt.Sprintf("Saving settings to %s", settingsFilename))
 		var configBytes []byte
 		if filepath.Ext(strings.ToLower(settingsFilename)) == ".hjson" {
 			options := hjson.DefaultOptions()
@@ -246,7 +265,8 @@ func main() {
 			configBytes, _ = json.MarshalIndent(serverSettings, "", "  ")
 		}
 		if err := os.WriteFile(settingsFilename, configBytes, 0644); err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 		os.Exit(0)
 	}
@@ -264,7 +284,8 @@ func main() {
 		serverSettings.Roles,
 	)
 	if err != nil {
-		log.Fatalf("!!! %s", err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	accessTokenValidator = middleware.NewAccessTokenValidator(serverSettings.KeySetProvider())
@@ -284,7 +305,8 @@ func main() {
 			sessionStore.Options.Secure = true
 		}
 	} else {
-		log.Fatalf("!!! %s", err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	var sessionManager = session.NewManager(sessionStore, serverSettings.SessionName, serverSettings.SessionLifetime)
 
@@ -295,14 +317,17 @@ func main() {
 	if serverSettings.PeopleStore != nil {
 		if sqlutil.IsDatabaseURI(serverSettings.PeopleStore.URI) {
 			if peopleStore, err = people.NewSqlStore(users, dbs, serverSettings.PeopleStore); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			}
 		} else if strings.HasPrefix(serverSettings.PeopleStore.URI, "ldap:") || strings.HasPrefix(serverSettings.PeopleStore.URI, "ldaps:") {
 			if peopleStore, err = people.NewLdapStore(users, serverSettings.PeopleStore); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty people_store.uri: %s", serverSettings.PeopleStore.URI)
+			slog.Error(fmt.Sprintf("unsupported or empty people_store.uri: %s", serverSettings.PeopleStore.URI))
+			os.Exit(1)
 		}
 	} else {
 		peopleStore = people.NewInMemoryStore(users)
@@ -311,10 +336,12 @@ func main() {
 	if serverSettings.ClientStore != nil {
 		if sqlutil.IsDatabaseURI(serverSettings.ClientStore.URI) {
 			if clientStore, err = clients.NewSqlStore(serverSettings.Clients, dbs, serverSettings.ClientStore); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty client_store.uri: %s", serverSettings.ClientStore.URI)
+			slog.Error(fmt.Sprintf("unsupported or empty client_store.uri: %s", serverSettings.ClientStore.URI))
+			os.Exit(1)
 		}
 	} else {
 		clientStore = clients.NewInMemoryStore(serverSettings.Clients)
@@ -322,13 +349,16 @@ func main() {
 
 	if serverSettings.EnableTokenRevocation {
 		if serverSettings.RevocationStore == nil {
-			log.Fatal("!!! revocation_store.uri must be specified to enable token revocation")
+			slog.Error("revocation_store.uri must be specified to enable token revocation")
+			os.Exit(1)
 		}
 		if !sqlutil.IsDatabaseURI(serverSettings.RevocationStore.URI) {
-			log.Fatalf("!!! unsupported or empty revocation_store.uri: %s", serverSettings.RevocationStore.URI)
+			slog.Error(fmt.Sprintf("unsupported or empty revocation_store.uri: %s", serverSettings.RevocationStore.URI))
+			os.Exit(1)
 		}
 		if revocationStore, err = revocation.NewSqlStore(dbs, serverSettings.RevocationStore); err != nil {
-			log.Fatalf("!!! %s", err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	} else {
 		revocationStore = revocation.NewNoopStore()
@@ -337,10 +367,12 @@ func main() {
 	if serverSettings.OTPAuthStore != nil {
 		if sqlutil.IsDatabaseURI(serverSettings.OTPAuthStore.URI) {
 			if otpauthStore, err = otpauth.NewSqlStore(users, dbs, serverSettings.OTPAuthStore); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty otpauth_store.uri: %s", serverSettings.ClientStore.URI)
+			slog.Error(fmt.Sprintf("unsupported or empty otpauth_store.uri: %s", serverSettings.ClientStore.URI))
+			os.Exit(1)
 		}
 	} else {
 		otpauthStore = otpauth.NewInMemoryStore(users)
@@ -351,12 +383,14 @@ func main() {
 	if serverSettings.Mail != nil {
 		if strings.HasPrefix(serverSettings.Mail.ServerURI, "smtp:") || strings.HasPrefix(serverSettings.Mail.ServerURI, "smtps:") {
 			if m, err := mail.NewMailer(serverSettings.Mail); err != nil {
-				log.Fatalf("!!! %s", err)
+				slog.Error(err.Error())
+				os.Exit(1)
 			} else {
 				mailer = m
 			}
 		} else {
-			log.Fatalf("!!! unsupported or empty mail.server_uri: %s", serverSettings.Mail.ServerURI)
+			slog.Error(fmt.Sprintf("unsupported or empty mail.server_uri: %s", serverSettings.Mail.ServerURI))
+			os.Exit(1)
 		}
 	}
 
@@ -364,18 +398,7 @@ func main() {
 
 	var router = mux.NewRouter()
 
-	router.NotFoundHandler = htmlutil.NotFoundHandler(basePath)
 	router.Handle(basePath+"/", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version)).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/style.css", server.StyleHandler()).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/scripts/main.js", server.MainScriptHandler()).
-		Methods(http.MethodGet)
-	router.Handle("/favicon.ico", server.FaviconHandler()).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/favicon-16x16.png", server.Favicon16x16Handler()).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/favicon-32x32.png", server.Favicon32x32Handler()).
 		Methods(http.MethodGet)
 	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, serverSettings.Issuer, passwordResetEnabled)).
 		Methods(http.MethodGet, http.MethodPost)
@@ -412,33 +435,48 @@ func main() {
 	}
 
 	if !serverSettings.DisableAPI {
-		var lookupPersonHandler = server.LookupPersonHandler(peopleStore,
-			serverSettings.PeopleAPICustomVersions, serverSettings.Roles)
-		if serverSettings.PeopleAPIRequireAuthN {
-			lookupPersonHandler = middleware.RequireAuthN(lookupPersonHandler, accessTokenValidator, peopleStore, serverSettings.Issuer)
-		}
-		router.Handle(basePath+"/api/{version}/people/{user_id}", lookupPersonHandler).
+		// ----- People API -----
+		router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(api.LookupPersonHandler(peopleStore, nil, serverSettings.Roles), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 			Methods(http.MethodGet, http.MethodOptions)
 		if !peopleStore.ReadOnly() {
-			router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.PutPersonHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutPersonHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 				Methods(http.MethodPut)
-			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 				Methods(http.MethodOptions, http.MethodPut)
 		}
 
-		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.LookupOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+		// ----- Custom People API
+
+		for customPath, customAPI := range serverSettings.CustomPeopleAPI {
+			var handler = api.LookupPersonHandler(peopleStore, &customAPI, serverSettings.Roles)
+			if customAPI.RequireAuthN {
+				handler = middleware.RequireAuthN(handler, accessTokenValidator, peopleStore, serverSettings.Issuer)
+			}
+			router.Handle(basePath+"/"+strings.Trim(customPath, "/ ")+"/{user_id}", handler).
+				Methods(http.MethodGet, http.MethodOptions)
+		}
+
+		// ----- OTPAuth API -----
+		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.LookupOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 			Methods(http.MethodGet, http.MethodOptions)
-		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ValidateOTPCodeHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ValidateOTPCodeHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 			Methods(http.MethodPost)
-		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.PutOTPAuthHandler(otpauthStore, serverSettings.Issuer), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutOTPAuthHandler(otpauthStore, serverSettings.Issuer), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 			Methods(http.MethodPut)
-		router.Handle(basePath+"/api/{version}/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(server.ResetOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ResetOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
 			Methods(http.MethodDelete)
+
+		// ----- Clients -----
+		router.Handle(basePath+"/api/v1/clients/{client_id}", middleware.RequireAuthN(api.LookupClientHandler(clientStore), accessTokenValidator, peopleStore, serverSettings.Issuer)).
+			Methods(http.MethodGet, http.MethodOptions)
 	}
 
-	log.Printf("Listening on http://localhost:%d%s/", serverSettings.Port, basePath)
+	router.PathPrefix("/").Handler(middleware.Log(http.FileServer(http.FS(assets.StaticFiles))))
+
+	slog.Info(fmt.Sprintf("Listening on http://localhost:%d%s/", serverSettings.Port, basePath))
 	err = http.ListenAndServe(fmt.Sprintf(":%d", serverSettings.Port), router)
 	if err != nil {
-		log.Fatalf("!!! %s", err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }

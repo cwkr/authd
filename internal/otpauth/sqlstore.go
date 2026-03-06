@@ -3,7 +3,8 @@ package otpauth
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/cwkr/authd/internal/people"
@@ -37,23 +38,23 @@ func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
 	}
 
 	if strings.TrimSpace(e.settings.Query) == "" {
-		log.Print("!!! SQL query empty")
+		slog.Error("SQL query empty")
 		return nil, nil
 	}
 
 	var otpauthURI sql.NullString
-	log.Printf("SQL: %s; -- %s", e.settings.Query, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", e.settings.Query, userID))
 	// SELECT otpauth_uri FROM people WHERE lower(user_id) = lower($1)
 	if row := e.dbconn.QueryRow(e.settings.Query, userID); row.Err() == nil {
 		if err := row.Scan(&otpauthURI); err != nil {
-			log.Printf("!!! Scan otpauth credentials failed: %v", err)
+			slog.Error(fmt.Sprintf("scan otpauth credentials failed: %s", err.Error()))
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrNotFound
 			}
 			return nil, err
 		}
 	} else {
-		log.Printf("!!! Query for otpauth credentials failed: %v", row.Err())
+		slog.Error(fmt.Sprintf("query for otpauth credentials failed: %s", row.Err().Error()))
 		return nil, row.Err()
 	}
 	if !otpauthURI.Valid || strings.TrimSpace(otpauthURI.String) == "" {
@@ -72,7 +73,7 @@ func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
 		return "", err
 	} else {
 		// UPDATE people SET otpauth_uri = $2, recovery_code_hash = $3, last_modified = now() WHERE lower(user_id) = lower($1)
-		log.Printf("SQL: %s; -- %s", e.settings.Update, userID)
+		slog.Info(fmt.Sprintf("SQL: %s; -- %s", e.settings.Update, userID))
 		if _, err := e.dbconn.Exec(e.settings.Update, userID, keyWrapper.URI(), recoveryCodeHash); err != nil {
 			return "", err
 		}
@@ -82,24 +83,24 @@ func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
 
 func (e sqlStore) VerifyRecoveryCode(userID, recoveryCode string) bool {
 	// SELECT recovery_code_hash FROM people WHERE lower(user_id) = lower($1)
-	log.Printf("SQL: %s; -- %s", e.settings.RecoveryCodeQuery, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", e.settings.RecoveryCodeQuery, userID))
 	var row = e.dbconn.QueryRow(e.settings.RecoveryCodeQuery, userID)
 	var recoveryCodeHash string
 	if err := row.Scan(&recoveryCodeHash); err == nil {
 		if err := bcrypt.CompareHashAndPassword([]byte(recoveryCodeHash), []byte(recoveryCode)); err != nil {
-			log.Printf("!!! recovery code comparison failed: %v", err)
+			slog.Error(fmt.Sprintf("recovery code comparison failed: %s", err.Error()))
 		} else {
 			return true
 		}
 	} else {
-		log.Printf("!!! Query for recovery code failed: %v", err)
+		slog.Error(fmt.Sprintf("query for recovery code failed: %s", err.Error()))
 	}
 	return false
 }
 
 func (e sqlStore) Delete(userID string) error {
 	// UPDATE people SET otpauth_uri = null, recovery_code_hash = null, last_modified = now() WHERE lower(user_id) = lower($1)
-	log.Printf("SQL: %s; -- %s", e.settings.Delete, userID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", e.settings.Delete, userID))
 	if _, err := e.dbconn.Exec(e.settings.Delete, userID); err != nil {
 		return err
 	}

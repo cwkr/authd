@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -28,7 +28,7 @@ type tokenHandler struct {
 }
 
 func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodPost}, true)
 
@@ -55,13 +55,13 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// debug output of parameters
-	log.Printf("grant_type=%q client_id=%q client_secret=%q code=%q code_verifier=%q refresh_token=%q",
-		grantType, clientID, strings.Repeat("*", utf8.RuneCountInString(clientSecret)), code, codeVerifier, refreshToken)
+	slog.Info(fmt.Sprintf("grant_type=%q client_id=%q client_secret=%q code=%q code_verifier=%q refresh_token=%q",
+		grantType, clientID, strings.Repeat("*", utf8.RuneCountInString(clientSecret)), code, codeVerifier, refreshToken))
 
 	var client clients.Client
 	if clientSecret != "" || grantType == GrantTypeClientCredentials || grantType == GrantTypePassword {
 		if c, err := t.clientStore.Authenticate(clientID, clientSecret); err != nil {
-			log.Printf("!!! %s", err)
+			slog.Error(err.Error())
 			if errors.Is(err, clients.ErrClientSecretMismatch) || errors.Is(err, clients.ErrClientNotFound) {
 				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
 			} else if errors.Is(err, clients.ErrClientSecretRequired) {
@@ -77,7 +77,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if c, err := t.clientStore.Lookup(clientID); err != nil {
-			log.Printf("!!! %s", err)
+			slog.Error(err.Error())
 			if errors.Is(err, clients.ErrClientNotFound) {
 				Error(w, ErrorInvalidClient, "", http.StatusUnauthorized)
 			} else {
@@ -98,7 +98,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 
 		// debug output of parameters
-		log.Printf("username=%q password=%q scope=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), scope)
+		slog.Info(fmt.Sprintf("username=%q password=%q scope=%q", userID, strings.Repeat("*", utf8.RuneCountInString(password)), scope))
 
 		if stringutil.IsAnyEmpty(clientID, clientSecret, userID, password) {
 			Error(w, ErrorInvalidRequest, "client_id, client_secret, username and password parameters are required", http.StatusBadRequest)
@@ -133,7 +133,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case GrantTypeAuthorizationCode:
 		var codeClaims, authCodeErr = t.tokenService.Verify(code, TokenTypeCode)
 		if authCodeErr != nil {
-			log.Printf("!!! %s", authCodeErr)
+			slog.Error(authCodeErr.Error())
 			Error(w, ErrorInvalidGrant, authCodeErr.Error(), http.StatusBadRequest)
 			return
 		}
@@ -203,7 +203,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if refreshTokenErr != nil {
-			log.Printf("!!! %s", refreshTokenErr)
+			slog.Error(refreshTokenErr.Error())
 			Error(w, ErrorInvalidGrant, refreshTokenErr.Error(), http.StatusBadRequest)
 			return
 		}
@@ -246,7 +246,7 @@ func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timing.Stop("jwtgen")
 	case GrantTypeClientCredentials:
 		var scope = strings.TrimSpace(r.PostFormValue("scope"))
-		log.Printf("scope=%q", scope)
+		slog.Info(fmt.Sprintf("scope=%q", scope))
 
 		if stringutil.IsAnyEmpty(clientID, clientSecret) {
 			Error(w, ErrorInvalidRequest, "client_id and client_secret parameters are required", http.StatusBadRequest)

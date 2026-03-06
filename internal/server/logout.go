@@ -3,13 +3,13 @@ package server
 import (
 	_ "embed"
 	"errors"
+	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/server/session"
@@ -39,7 +39,7 @@ type logoutHandler struct {
 }
 
 func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		clientID    = strings.TrimSpace(r.FormValue("client_id"))
@@ -62,7 +62,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clientID != "" {
 		if c, err := l.clientStore.Lookup(clientID); err != nil {
 			if !errors.Is(err, clients.ErrClientNotFound) {
-				htmlutil.Error(w, l.basePath, "invalid_client", http.StatusUnauthorized)
+				httputil.PlainError(w, "invalid_client", http.StatusUnauthorized)
 				return
 			}
 		} else {
@@ -72,7 +72,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if redirectURI != "" && !strings.HasPrefix(redirectURI, strings.TrimRight(l.serverSettings.Issuer, "/")) {
 		if !client.MatchesRedirectURI(redirectURI) {
-			htmlutil.Error(w, l.basePath, "post_logout_redirect_uri mismatch", http.StatusBadRequest)
+			httputil.PlainError(w, "post_logout_redirect_uri mismatch", http.StatusBadRequest)
 			return
 		}
 	}
@@ -80,7 +80,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	httputil.NoCache(w)
 
 	if err := l.sessionManager.EndSession(r, w); err != nil {
-		htmlutil.Error(w, l.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (l *logoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if err := l.tpl.ExecuteTemplate(w, "logout", map[string]any{"base_path": l.basePath}); err != nil {
-			htmlutil.Error(w, l.basePath, err.Error(), http.StatusInternalServerError)
+			httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }

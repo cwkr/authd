@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
-	"log"
+	"log/slog"
 	"math/big"
 	"net/url"
 	"strings"
@@ -58,7 +58,7 @@ func NewKeyWrapper(issuer, userID, algorithm, secret string, digits int) (*KeyWr
 		var sb, _ = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 		opts.Secret = sb
 	}
-	log.Printf("Generating TOTP Key for %s@%s using %s with %d digits", userID, otpID, opts.Algorithm, digits)
+	slog.Info(fmt.Sprintf("Generating TOTP Key for %s@%s using %s with %d digits", userID, otpID, opts.Algorithm, digits))
 	if totpKey, err := totp.Generate(opts); err != nil {
 		return nil, err
 	} else {
@@ -72,7 +72,7 @@ func (k KeyWrapper) VerifyCode(code string) bool {
 		Digits:    k.key.Digits(),
 		Algorithm: k.key.Algorithm(),
 	}); err != nil {
-		log.Printf("!!! %s", err)
+		slog.Error(err.Error())
 		return false
 	} else {
 		return valid

@@ -3,7 +3,8 @@ package clients
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -112,7 +113,7 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 	}
 
 	if strings.TrimSpace(s.settings.LookupQuery) == "" {
-		log.Print("!!! SQL query empty")
+		slog.Error("SQL query empty")
 		return nil, nil
 	}
 
@@ -122,23 +123,23 @@ func (s *sqlStore) Lookup(clientID string) (*Client, error) {
 	} else {
 		storedClient = &genericClient{}
 	}
-	log.Printf("SQL: %s; -- %s", s.settings.LookupQuery, clientID)
+	slog.Info(fmt.Sprintf("SQL: %s; -- %s", s.settings.LookupQuery, clientID))
 	// SELECT access_token_lifetime, audience, auth_code_lifetime, disable_implicit, enable_refresh_token_rotation,
 	// id_token_lifetime, redirect_uris, refresh_token_lifetime, require_2fa, signing_algorithm, secret_hash
 	// FROM clients WHERE lower(client_id) = lower($1)
 	if rows, err := s.dbconn.Query(s.settings.LookupQuery, clientID); err == nil {
 		if err := scan.RowStrict(storedClient, rows); err != nil {
-			log.Printf("!!! Scan client failed: %v", err)
+			slog.Error(fmt.Sprintf("scan client failed: %s", err.Error()))
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrClientNotFound
 			}
 			return nil, err
 		}
 	} else {
-		log.Printf("!!! Query for client failed: %v", err)
+		slog.Error(fmt.Sprintf("query for client failed: %s", err.Error()))
 		return nil, err
 	}
-	log.Printf("%#v", storedClient)
+	slog.Debug(fmt.Sprintf("%#v", storedClient))
 	return storedClient.Client(), nil
 }
 
@@ -152,15 +153,15 @@ func (s *sqlStore) List() ([]string, error) {
 
 	var sqlClientIDs []string
 
-	log.Printf("SQL: %s", s.settings.ListQuery)
+	slog.Info(fmt.Sprintf("SQL: %s", s.settings.ListQuery))
 	// SELECT client_id FROM clients
 	if rows, err := s.dbconn.Query(s.settings.ListQuery); err == nil {
 		if err := scan.RowsStrict(&sqlClientIDs, rows); err != nil {
-			log.Printf("!!! Scan client id list failed: %v", err)
+			slog.Error(fmt.Sprintf("scan client id list failed: %s", err.Error()))
 			return nil, err
 		}
 	} else {
-		log.Printf("!!! Query for client id list failed: %v", err)
+		slog.Error(fmt.Sprintf("query for client id list failed: %s", err.Error()))
 		return nil, err
 	}
 

@@ -5,12 +5,11 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"strings"
 
-	"github.com/cwkr/authd/internal/htmlutil"
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
 	"github.com/cwkr/authd/internal/oauth2/pkce"
@@ -34,7 +33,7 @@ type indexHandler struct {
 }
 
 func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	var (
 		clientIDs      []string
@@ -44,7 +43,7 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if cids, err := i.clientStore.List(); err == nil {
 		clientIDs = cids
 	} else {
-		htmlutil.Error(w, i.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -72,7 +71,7 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"current_session": currentSession,
 	})
 	if err != nil {
-		htmlutil.Error(w, i.basePath, err.Error(), http.StatusInternalServerError)
+		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 

@@ -22,15 +22,17 @@ import (
 )
 
 type CustomPeopleAPI struct {
-	FilterParam     string            `json:"filter_param"`
-	Attributes      map[string]string `json:"attributes"`
-	FixedAttributes map[string]string `json:"fixed_attributes"`
+	FilterParam     string            `json:"filter_param,omitempty"`
+	Attributes      map[string]string `json:"attributes,omitempty"`
+	FixedAttributes map[string]string `json:"fixed_attributes,omitempty"`
+	RequireAuthN    bool              `json:"require_authn,omitempty"`
 }
 
 type Server struct {
 	Issuer                    string                            `json:"issuer"`
 	Port                      int                               `json:"port"`
 	Title                     string                            `json:"title,omitempty"`
+	Debug                     bool                              `json:"debug,omitempty"`
 	Users                     map[string]people.AuthenticPerson `json:"users,omitempty"`
 	Key                       string                            `json:"key"`
 	AdditionalKeys            []string                          `json:"additional_keys,omitempty"`
@@ -47,7 +49,7 @@ type Server struct {
 	PeopleStore               *people.StoreSettings             `json:"people_store,omitempty"`
 	OTPAuthStore              *otpauth.StoreSettings            `json:"otpauth_store,omitempty"`
 	DisableAPI                bool                              `json:"disable_api,omitempty"`
-	PeopleAPICustomVersions   map[string]CustomPeopleAPI        `json:"people_api_custom_versions,omitempty"`
+	CustomPeopleAPI           map[string]CustomPeopleAPI        `json:"custom_people_api,omitempty"`
 	PeopleAPIRequireAuthN     bool                              `json:"people_api_require_authn,omitempty"`
 	LoginTemplate             string                            `json:"login_template,omitempty"`
 	LogoutTemplate            string                            `json:"logout_template,omitempty"`

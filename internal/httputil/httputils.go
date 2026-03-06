@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 )
 
 func RedirectFragment(w http.ResponseWriter, r *http.Request, url string, params url.Values) {
@@ -50,15 +49,9 @@ func AllowCORS(w http.ResponseWriter, r *http.Request, allowMethods []string, al
 }
 
 func NoCache(w http.ResponseWriter) {
-	w.Header().Set("Cache-Control", "private, no-cache, no-store, no-transform")
+	w.Header().Set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
-}
-
-func Cache(w http.ResponseWriter, duration time.Duration) {
-	var gmt, _ = time.LoadLocation("GMT")
-	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", int64(duration.Seconds())))
-	w.Header().Set("Expires", time.Now().Add(duration).In(gmt).Format(time.RFC1123))
 }
 
 func IsJSON(contentType string) bool {

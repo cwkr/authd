@@ -2,11 +2,13 @@ package oauth2
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/keyset"
 	"github.com/go-jose/go-jose/v3"
-	"log"
-	"net/http"
 )
 
 type jwksHandler struct {
@@ -14,7 +16,7 @@ type jwksHandler struct {
 }
 
 func (j *jwksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%s %s", r.Method, r.URL)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
 	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, false)
 
@@ -25,7 +27,6 @@ func (j *jwksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var keySet jose.JSONWebKeySet
 	if publicKeys, err := j.keySetProvider.Get(); err != nil {
-		log.Printf("!!! %s", err)
 		Error(w, "key_retrieval_error", err.Error(), http.StatusInternalServerError)
 		return
 	} else {
@@ -35,7 +36,6 @@ func (j *jwksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if bytes, err := json.Marshal(keySet); err != nil {
-		log.Printf("!!! %s", err)
 		Error(w, ErrorInternal, err.Error(), http.StatusInternalServerError)
 		return
 	} else {
