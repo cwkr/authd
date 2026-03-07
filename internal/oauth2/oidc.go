@@ -43,6 +43,7 @@ type DiscoveryDocument struct {
 type discoveryDocumentHandler struct {
 	issuer                   string
 	scope                    string
+	customKeySetURI          string
 	tokenRevocationSupported bool
 }
 
@@ -53,11 +54,23 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var baseURL = strings.TrimRight(d.issuer, "/")
+	var (
+		baseURL = strings.TrimRight(d.issuer, "/")
+		jwksURI = baseURL + "/.well-known/keys"
+	)
+
+	if customKeySetURI := strings.TrimSpace(d.customKeySetURI); customKeySetURI != "" {
+		if strings.HasPrefix(customKeySetURI, "http://") || strings.HasPrefix(customKeySetURI, "https://") {
+			jwksURI = customKeySetURI
+		} else {
+			jwksURI = baseURL + "/" + strings.Trim(customKeySetURI, "/")
+		}
+	}
+
 	var discoveryDocument = DiscoveryDocument{
 		Issuer:                 d.issuer,
 		AuthorizationEndpoint:  baseURL + "/authorize",
-		JwksURI:                baseURL + "/jwks",
+		JwksURI:                jwksURI,
 		ResponseTypesSupported: []string{"code", "token"},
 		GrantTypesSupported: []string{
 			"authorization_code",
@@ -87,10 +100,11 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func DiscoveryDocumentHandler(issuer, scope string, tokenRevocationSupported bool) http.Handler {
+func DiscoveryDocumentHandler(issuer, scope, customKeySetURI string, tokenRevocationSupported bool) http.Handler {
 	return &discoveryDocumentHandler{
 		issuer:                   issuer,
 		scope:                    scope,
+		customKeySetURI:          customKeySetURI,
 		tokenRevocationSupported: tokenRevocationSupported,
 	}
 }

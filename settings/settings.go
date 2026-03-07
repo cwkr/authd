@@ -36,6 +36,7 @@ type Server struct {
 	Users                     map[string]people.AuthenticPerson `json:"users,omitempty"`
 	Key                       string                            `json:"key"`
 	AdditionalKeys            []string                          `json:"additional_keys,omitempty"`
+	CustomKeySetURI           string                            `json:"custom_jwks_uri,omitempty"`
 	Clients                   map[string]clients.Client         `json:"clients,omitempty"`
 	ClientStore               *clients.StoreSettings            `json:"client_store,omitempty"`
 	CustomScope               string                            `json:"custom_scope,omitempty"`

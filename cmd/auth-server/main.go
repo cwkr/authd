@@ -33,7 +33,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var version = "v0.9.x"
+var version = "v0.10.x"
 
 func main() {
 	var (
@@ -395,16 +395,24 @@ func main() {
 
 	var passwordResetEnabled = mailer != nil && !peopleStore.ReadOnly()
 
-	http.Handle(basePath+"/{$}", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version))
+	http.Handle(basePath+"/{$}", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version, serverSettings.CustomKeySetURI))
 	http.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, serverSettings.Issuer, passwordResetEnabled))
 	http.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
 	http.Handle(basePath+"/health", server.HealthHandler(peopleStore))
 	http.Handle(basePath+"/info", server.InfoHandler(version, runtime.Version()))
 
-	http.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider()))
+	if customKeySetURI := strings.TrimSpace(serverSettings.CustomKeySetURI); customKeySetURI != "" {
+		if !(strings.HasPrefix(customKeySetURI, "http://") || strings.HasPrefix(customKeySetURI, "https://")) {
+			http.Handle(basePath+"/"+strings.Trim(customKeySetURI, "/"), oauth2.JwksHandler(serverSettings.KeySetProvider()))
+		} else {
+			http.Handle(basePath+"/.well-known/keys", oauth2.JwksHandler(serverSettings.KeySetProvider()))
+		}
+	} else {
+		http.Handle(basePath+"/.well-known/keys", oauth2.JwksHandler(serverSettings.KeySetProvider()))
+	}
 	http.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, scope))
 	http.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(serverSettings.Issuer, basePath, tokenCreator, sessionManager, peopleStore, clientStore, scope))
-	http.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation))
+	http.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.CustomKeySetURI, serverSettings.EnableTokenRevocation))
 	http.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.CustomUserinfoClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer))
 
 	http.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, otpauthStore, basePath, version, serverSettings.Issuer))

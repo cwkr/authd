@@ -22,14 +22,15 @@ import (
 var indexTpl string
 
 type indexHandler struct {
-	basePath       string
-	serverSettings *settings.Server
-	publicKey      *rsa.PublicKey
-	sessionManager session.Manager
-	clientStore    clients.Store
-	scope          string
-	tpl            *template.Template
-	version        string
+	basePath        string
+	serverSettings  *settings.Server
+	publicKey       *rsa.PublicKey
+	sessionManager  session.Manager
+	clientStore     clients.Store
+	scope           string
+	tpl             *template.Template
+	version         string
+	customKeySetURI string
 }
 
 func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +60,18 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "Auth Server"
 	}
-	var codeVerifier = stringutil.RandomAlphanumericString(10)
+
+	var (
+		codeVerifier = stringutil.RandomAlphanumericString(10)
+		jwksURI      = i.basePath + "/.well-known/keys"
+	)
+
+	if customKeySetURI := strings.TrimSpace(i.customKeySetURI); customKeySetURI != "" {
+		if !strings.HasPrefix(customKeySetURI, "http://") && !strings.HasPrefix(customKeySetURI, "https://") {
+			jwksURI = i.basePath + "/" + strings.Trim(customKeySetURI, "/")
+		}
+	}
+
 	var err = i.tpl.ExecuteTemplate(w, "index", map[string]any{
 		"base_path":       i.basePath,
 		"issuer":          strings.TrimRight(i.serverSettings.Issuer, "/"),
@@ -73,20 +85,22 @@ func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"version":         i.version,
 		"client_ids":      clientIDs,
 		"current_session": currentSession,
+		"jwks_uri":        jwksURI,
 	})
 	if err != nil {
 		httputil.PlainError(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func IndexHandler(basePath string, serverSettings *settings.Server, sessionManager session.Manager, clientStore clients.Store, scope, version string) http.Handler {
+func IndexHandler(basePath string, serverSettings *settings.Server, sessionManager session.Manager, clientStore clients.Store, scope, version, customKeySetURI string) http.Handler {
 	return &indexHandler{
-		basePath:       basePath,
-		serverSettings: serverSettings,
-		sessionManager: sessionManager,
-		clientStore:    clientStore,
-		scope:          scope,
-		tpl:            template.Must(template.New("index").Funcs(stringutil.TemplateFuncs).Parse(indexTpl)),
-		version:        version,
+		basePath:        basePath,
+		serverSettings:  serverSettings,
+		sessionManager:  sessionManager,
+		clientStore:     clientStore,
+		scope:           scope,
+		tpl:             template.Must(template.New("index").Funcs(stringutil.TemplateFuncs).Parse(indexTpl)),
+		version:         version,
+		customKeySetURI: customKeySetURI,
 	}
 }
