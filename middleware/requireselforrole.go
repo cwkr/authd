@@ -8,7 +8,6 @@ import (
 
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/people"
-	"github.com/gorilla/mux"
 )
 
 const ErrorAccessDenied = "access_denied"
@@ -17,7 +16,7 @@ func RequireSelfOrRole(next http.Handler, peopleStore people.Store, roleMappings
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
 			userID = r.Context().Value("user_id").(string)
-			self   = strings.EqualFold(mux.Vars(r)["user_id"], userID)
+			self   = strings.EqualFold(strings.TrimSpace(r.PathValue("user_id")), userID)
 			user   oauth2.User
 			roles  []string
 		)

@@ -14,7 +14,6 @@ import (
 	"github.com/cwkr/authd/internal/oauth2"
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/settings"
-	"github.com/gorilla/mux"
 )
 
 const ErrorUnsupportedMediaType = "unsupported_media_type"
@@ -44,10 +43,7 @@ func cleanup(slice []string) []string {
 func (p *lookupPersonHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions, http.MethodPut}, true)
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut}, true, true) {
 		return
 	}
 
@@ -57,8 +53,7 @@ func (p *lookupPersonHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		subject = contextUserID.(string)
 	}
 
-	var pathVars = mux.Vars(r)
-	var userID = strings.TrimSpace(pathVars["user_id"])
+	var userID = strings.TrimSpace(r.PathValue("user_id"))
 
 	if person, err := p.peopleStore.Lookup(userID); err == nil {
 		var user = oauth2.User{UserID: userID, Person: *person}
@@ -111,7 +106,9 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions, http.MethodPut}, true)
+		if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut}, true, true) {
+			return
+		}
 
 		if !httputil.IsJSON(r.Header.Get("Content-Type")) {
 			oauth2.Error(w, ErrorUnsupportedMediaType, "", http.StatusUnsupportedMediaType)
@@ -130,7 +127,7 @@ func PutPersonHandler(peopleStore people.Store) http.Handler {
 			return
 		}
 
-		var userID = mux.Vars(r)["user_id"]
+		var userID = r.PathValue("user_id")
 
 		if err := peopleStore.Put(userID, &person); err != nil {
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)
@@ -144,10 +141,7 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodPut}, true)
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if httputil.AllowMethods(w, r, []string{http.MethodOptions, http.MethodPut}, true, true) {
 			return
 		}
 
@@ -177,7 +171,7 @@ func ChangePasswordHandler(peopleStore people.Store) http.Handler {
 			return
 		}
 
-		var userID = mux.Vars(r)["user_id"]
+		var userID = r.PathValue("user_id")
 
 		if err := peopleStore.ChangePassword(userID, newPassword); err != nil {
 			oauth2.Error(w, oauth2.ErrorInternal, err.Error(), http.StatusInternalServerError)

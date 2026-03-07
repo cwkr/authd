@@ -16,13 +16,16 @@ type healthHandler struct {
 
 func (i *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
+	if httputil.AllowMethods(w, r, []string{http.MethodOptions, http.MethodGet, http.MethodHead}, true, false) {
+		return
+	}
+
 	var status = struct {
 		Status string `json:"status"`
 	}{"UP"}
 
 	httputil.NoCache(w)
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := i.peopleStore.Ping(); err != nil {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 		slog.Error(fmt.Sprintf("503 Service Unavailable: %s", err.Error()))

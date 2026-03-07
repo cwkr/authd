@@ -17,7 +17,6 @@ import (
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/stringutil"
 	"github.com/go-jose/go-jose/v3/jwt"
-	"github.com/gorilla/mux"
 )
 
 //go:embed templates/chpasswd.gohtml
@@ -45,6 +44,10 @@ type changePasswdHandler struct {
 func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}, false, false) {
+		return
+	}
+
 	var (
 		errorMessage   string
 		successMessage string
@@ -54,7 +57,7 @@ func (c changePasswdHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tokenID        string
 	)
 
-	if claims, err := c.tokenCreator.Verify(mux.Vars(r)["token"], oauth2.TokenTypePasswordReset); err == nil {
+	if claims, err := c.tokenCreator.Verify(r.PathValue("token"), oauth2.TokenTypePasswordReset); err == nil {
 		userID = claims.UserID
 		expiryTime = claims.Expiry.Time()
 		tokenID = claims.TokenID

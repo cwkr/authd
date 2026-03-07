@@ -41,6 +41,10 @@ type authorizeHandler struct {
 func (a *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions}, false, false) {
+		return
+	}
+
 	var (
 		timing          = httputil.NewTiming()
 		responseType    = strings.ToLower(strings.TrimSpace(r.FormValue("response_type")))

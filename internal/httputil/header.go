@@ -1,21 +1,10 @@
 package httputil
 
 import (
-	"fmt"
-	"mime"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 )
-
-func RedirectFragment(w http.ResponseWriter, r *http.Request, url string, params url.Values) {
-	http.Redirect(w, r, fmt.Sprintf("%s#%s", url, params.Encode()), http.StatusFound)
-}
-
-func RedirectQuery(w http.ResponseWriter, r *http.Request, url string, params url.Values) {
-	http.Redirect(w, r, fmt.Sprintf("%s?%s", url, params.Encode()), http.StatusFound)
-}
 
 func BearerAuth(r *http.Request) (string, bool) {
 	var fields = strings.Fields(r.Header.Get("Authorization"))
@@ -42,10 +31,6 @@ func AllowCORS(w http.ResponseWriter, r *http.Request, allowMethods []string, al
 	}
 	w.Header().Set("Access-Control-Max-Age", "7200")
 	w.Header().Set("Vary", "Origin, Access-Control-Request-Headers")
-
-	if r.Method == http.MethodOptions {
-		w.Header().Set("Allow", allowedMethods)
-	}
 }
 
 func NoCache(w http.ResponseWriter) {
@@ -54,18 +39,19 @@ func NoCache(w http.ResponseWriter) {
 	w.Header().Set("Expires", "0")
 }
 
-func IsJSON(contentType string) bool {
-	var mediaType, _, err = mime.ParseMediaType(contentType)
-	if err != nil {
-		return false
+func AllowMethods(w http.ResponseWriter, r *http.Request, allowedMethods []string, allowCORS, allowCredentials bool) bool {
+	if !slices.Contains(allowedMethods, r.Method) {
+		w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+		PlainError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return true
 	}
-	return strings.HasPrefix(mediaType, "application") && strings.HasSuffix(mediaType, "json")
-}
-
-func IsFormData(contentType string) bool {
-	var mediaType, _, err = mime.ParseMediaType(contentType)
-	if err != nil {
-		return false
+	if allowCORS {
+		AllowCORS(w, r, allowedMethods, allowCredentials)
 	}
-	return slices.Contains([]string{"application/x-www-form-urlencoded", "multipart/form-data"}, mediaType)
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+		w.WriteHeader(http.StatusNoContent)
+		return true
+	}
+	return false
 }

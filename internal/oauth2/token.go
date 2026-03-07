@@ -30,10 +30,7 @@ type tokenHandler struct {
 func (t *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-	httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodPost}, true)
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
+	if httputil.AllowMethods(w, r, []string{http.MethodOptions, http.MethodPost}, true, true) {
 		return
 	}
 

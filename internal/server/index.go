@@ -35,6 +35,10 @@ type indexHandler struct {
 func (i *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions}, false, false) {
+		return
+	}
+
 	var (
 		clientIDs      []string
 		currentSession session.Current

@@ -2,12 +2,17 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/cwkr/authd/internal/httputil"
 	"net/http"
+
+	"github.com/cwkr/authd/internal/httputil"
 )
 
 func InfoHandler(version, runtimeVersion string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions}, true, false) {
+			return
+		}
 
 		var info = struct {
 			Version   string `json:"version"`

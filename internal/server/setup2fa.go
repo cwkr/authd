@@ -44,6 +44,10 @@ type setup2FAHandler struct {
 func (o *setup2FAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}, false, false) {
+		return
+	}
+
 	var clientID = strings.TrimSpace(r.FormValue("client_id"))
 
 	if stringutil.IsAnyEmpty(clientID) {

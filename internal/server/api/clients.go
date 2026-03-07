@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/oauth2/clients"
-	"github.com/gorilla/mux"
 )
 
 type maskedClient struct {
@@ -22,15 +22,12 @@ func LookupClientHandler(clientStore clients.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, true)
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}, true, true) {
 			return
 		}
 
 		var (
-			clientID = mux.Vars(r)["client_id"]
+			clientID = strings.TrimSpace(r.PathValue("client_id"))
 			client   clients.Client
 		)
 

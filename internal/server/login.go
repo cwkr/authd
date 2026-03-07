@@ -46,6 +46,10 @@ type loginHandler struct {
 func (j *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
+	if httputil.AllowMethods(w, r, []string{http.MethodOptions, http.MethodGet, http.MethodPost}, false, false) {
+		return
+	}
+
 	var (
 		message, userID, password, clientID, code string
 		sessionActive, sessionVerified            bool

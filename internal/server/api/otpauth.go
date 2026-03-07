@@ -13,22 +13,18 @@ import (
 	"github.com/cwkr/authd/internal/httputil"
 	"github.com/cwkr/authd/internal/otpauth"
 	"github.com/cwkr/authd/internal/stringutil"
-	"github.com/gorilla/mux"
 )
 
 func LookupOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if httputil.AllowMethods(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true, true) {
 			return
 		}
 
 		var (
-			userID     = mux.Vars(r)["user_id"]
+			userID     = r.PathValue("user_id")
 			keyWrapper *otpauth.KeyWrapper
 		)
 
@@ -67,10 +63,12 @@ func ValidateOTPCodeHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
+		if httputil.AllowMethods(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true, true) {
+			return
+		}
 
 		var (
-			userID     = mux.Vars(r)["user_id"]
+			userID     = r.PathValue("user_id")
 			keyWrapper *otpauth.KeyWrapper
 		)
 
@@ -138,10 +136,12 @@ func PutOTPAuthHandler(otpauthStore otpauth.Store, issuer string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true)
+		if httputil.AllowMethods(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true, true) {
+			return
+		}
 
 		var (
-			userID       = mux.Vars(r)["user_id"]
+			userID       = r.PathValue("user_id")
 			self         = strings.EqualFold(r.Context().Value("user_id").(string), userID)
 			recoveryCode string
 			keyWrapper   *otpauth.KeyWrapper
@@ -242,10 +242,12 @@ func ResetOTPAuthHandler(otpauthStore otpauth.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-		httputil.AllowCORS(w, r, []string{http.MethodOptions, http.MethodGet, http.MethodPost, http.MethodDelete}, true)
+		if httputil.AllowMethods(w, r, []string{http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodDelete}, true, true) {
+			return
+		}
 
 		var (
-			userID       = mux.Vars(r)["user_id"]
+			userID       = r.PathValue("user_id")
 			self         = strings.EqualFold(r.Context().Value("user_id").(string), userID)
 			recoveryCode string
 		)

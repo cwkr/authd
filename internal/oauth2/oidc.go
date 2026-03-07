@@ -49,10 +49,7 @@ type discoveryDocumentHandler struct {
 func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL))
 
-	httputil.AllowCORS(w, r, []string{http.MethodGet, http.MethodOptions}, false)
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
+	if httputil.AllowMethods(w, r, []string{http.MethodGet, http.MethodHead, http.MethodOptions}, true, false) {
 		return
 	}
 

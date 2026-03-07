@@ -6,7 +6,6 @@ require (
 	github.com/blockloop/scan/v2 v2.5.0
 	github.com/go-jose/go-jose/v3 v3.0.4
 	github.com/go-ldap/ldap/v3 v3.4.12
-	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/hjson/hjson-go/v4 v4.6.0
 	github.com/lib/pq v1.10.9

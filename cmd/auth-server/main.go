@@ -28,7 +28,6 @@ import (
 	"github.com/cwkr/authd/mail"
 	"github.com/cwkr/authd/middleware"
 	"github.com/cwkr/authd/settings"
-	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/hjson/hjson-go/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -396,53 +395,35 @@ func main() {
 
 	var passwordResetEnabled = mailer != nil && !peopleStore.ReadOnly()
 
-	var router = mux.NewRouter()
+	http.Handle(basePath+"/{$}", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version))
+	http.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, serverSettings.Issuer, passwordResetEnabled))
+	http.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
+	http.Handle(basePath+"/health", server.HealthHandler(peopleStore))
+	http.Handle(basePath+"/info", server.InfoHandler(version, runtime.Version()))
 
-	router.Handle(basePath+"/", server.IndexHandler(basePath, serverSettings, sessionManager, clientStore, scope, version)).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/login", server.LoginHandler(basePath, sessionManager, peopleStore, clientStore, otpauthStore, serverSettings.Issuer, passwordResetEnabled)).
-		Methods(http.MethodGet, http.MethodPost)
-	router.Handle(basePath+"/logout", server.LogoutHandler(basePath, serverSettings, sessionManager, clientStore))
-	router.Handle(basePath+"/health", server.HealthHandler(peopleStore)).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/info", server.InfoHandler(version, runtime.Version())).
-		Methods(http.MethodGet)
+	http.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider()))
+	http.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, scope))
+	http.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(serverSettings.Issuer, basePath, tokenCreator, sessionManager, peopleStore, clientStore, scope))
+	http.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation))
+	http.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.CustomUserinfoClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer))
 
-	router.Handle(basePath+"/jwks", oauth2.JwksHandler(serverSettings.KeySetProvider())).
-		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/token", oauth2.TokenHandler(tokenCreator, peopleStore, clientStore, revocationStore, scope)).
-		Methods(http.MethodOptions, http.MethodPost)
-	router.Handle(basePath+"/authorize", oauth2.AuthorizeHandler(serverSettings.Issuer, basePath, tokenCreator, sessionManager, peopleStore, clientStore, scope)).
-		Methods(http.MethodGet)
-	router.Handle(basePath+"/.well-known/openid-configuration", oauth2.DiscoveryDocumentHandler(serverSettings.Issuer, scope, serverSettings.EnableTokenRevocation)).
-		Methods(http.MethodGet, http.MethodOptions)
-	router.Handle(basePath+"/userinfo", middleware.RequireJWT(oauth2.UserinfoHandler(peopleStore, serverSettings.CustomUserinfoClaims, serverSettings.Roles), accessTokenValidator, serverSettings.Issuer)).
-		Methods(http.MethodGet, http.MethodOptions)
-
-	router.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, otpauthStore, basePath, version, serverSettings.Issuer)).
-		Methods(http.MethodGet, http.MethodPost)
+	http.Handle(basePath+"/setup-2fa", server.Setup2FAHandler(sessionManager, clientStore, otpauthStore, basePath, version, serverSettings.Issuer))
 
 	if passwordResetEnabled {
-		router.Handle(basePath+"/resetpasswd", server.ResetPasswdHandler(peopleStore, clientStore, mailer, tokenCreator, serverSettings.Issuer, basePath, version)).
-			Methods(http.MethodGet, http.MethodPost)
-		router.Handle(basePath+"/chpasswd/{token}", server.ChangePasswdHandler(peopleStore, tokenCreator, revocationStore, serverSettings.Issuer, basePath, version)).
-			Methods(http.MethodGet, http.MethodPost)
+		http.Handle(basePath+"/resetpasswd", server.ResetPasswdHandler(peopleStore, clientStore, mailer, tokenCreator, serverSettings.Issuer, basePath, version))
+		http.Handle(basePath+"/chpasswd/{token}", server.ChangePasswdHandler(peopleStore, tokenCreator, revocationStore, serverSettings.Issuer, basePath, version))
 	}
 
 	if serverSettings.EnableTokenRevocation {
-		router.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore)).
-			Methods(http.MethodPost, http.MethodOptions)
+		http.Handle(basePath+"/revoke", oauth2.RevokeHandler(tokenCreator, clientStore, revocationStore))
 	}
 
 	if !serverSettings.DisableAPI {
 		// ----- People API -----
-		router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(api.LookupPersonHandler(peopleStore, nil, serverSettings.Roles), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodGet, http.MethodOptions)
+		http.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(api.LookupPersonHandler(peopleStore, nil, serverSettings.Roles), accessTokenValidator, peopleStore, serverSettings.Issuer))
 		if !peopleStore.ReadOnly() {
-			router.Handle(basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutPersonHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-				Methods(http.MethodPut)
-			router.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-				Methods(http.MethodOptions, http.MethodPut)
+			http.Handle("PUT "+basePath+"/api/v1/people/{user_id}", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutPersonHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
+			http.Handle(basePath+"/api/v1/people/{user_id}/password", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ChangePasswordHandler(peopleStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
 		}
 
 		// ----- Custom People API
@@ -452,29 +433,24 @@ func main() {
 			if customAPI.RequireAuthN {
 				handler = middleware.RequireAuthN(handler, accessTokenValidator, peopleStore, serverSettings.Issuer)
 			}
-			router.Handle(basePath+"/"+strings.Trim(customPath, "/ ")+"/{user_id}", handler).
-				Methods(http.MethodGet, http.MethodOptions)
+			http.Handle("GET "+basePath+"/"+strings.Trim(customPath, "/ ")+"/{user_id}", handler)
+			http.Handle("OPTIONS "+basePath+"/"+strings.Trim(customPath, "/ ")+"/{user_id}", handler)
 		}
 
 		// ----- OTPAuth API -----
-		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.LookupOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodGet, http.MethodOptions)
-		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ValidateOTPCodeHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodPost)
-		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutOTPAuthHandler(otpauthStore, serverSettings.Issuer), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodPut)
-		router.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ResetOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodDelete)
+		http.Handle(basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.LookupOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
+		http.Handle("POST "+basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ValidateOTPCodeHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
+		http.Handle("PUT "+basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.PutOTPAuthHandler(otpauthStore, serverSettings.Issuer), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
+		http.Handle("DELETE "+basePath+"/api/v1/people/{user_id}/otpauth", middleware.RequireAuthN(middleware.RequireSelfOrRole(api.ResetOTPAuthHandler(otpauthStore), peopleStore, serverSettings.Roles, serverSettings.AdministratorRole), accessTokenValidator, peopleStore, serverSettings.Issuer))
 
 		// ----- Clients -----
-		router.Handle(basePath+"/api/v1/clients/{client_id}", middleware.RequireAuthN(api.LookupClientHandler(clientStore), accessTokenValidator, peopleStore, serverSettings.Issuer)).
-			Methods(http.MethodGet, http.MethodOptions)
+		http.Handle(basePath+"/api/v1/clients/{client_id}", middleware.RequireAuthN(api.LookupClientHandler(clientStore), accessTokenValidator, peopleStore, serverSettings.Issuer))
 	}
 
-	router.PathPrefix("/").Handler(middleware.Log(http.FileServer(http.FS(assets.StaticFiles))))
+	http.Handle("/", middleware.Log(http.FileServer(http.FS(assets.StaticFiles))))
 
 	slog.Info(fmt.Sprintf("Listening on http://localhost:%d%s/", serverSettings.Port, basePath))
-	err = http.ListenAndServe(fmt.Sprintf(":%d", serverSettings.Port), router)
+	err = http.ListenAndServe(fmt.Sprintf(":%d", serverSettings.Port), nil)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
