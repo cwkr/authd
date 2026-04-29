@@ -30,7 +30,6 @@ import (
 	"github.com/cwkr/authd/settings"
 	"github.com/gorilla/sessions"
 	"github.com/hjson/hjson-go/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var version = "v0.10.x"
@@ -47,41 +46,19 @@ func main() {
 		err                  error
 		configFilename       string
 		settingsFilename     string
-		setClientID          string
-		setClientSecret      string
-		setUserID            string
-		setPassword          string
-		setGivenName         string
-		setFamilyName        string
-		setEmail             string
-		setDepartment        string
-		generateTOTPSecret   bool
-		totpAlgorithm        string
-		totpDigits           int
 		keySize              int
 		keyID                string
 		saveSettings         bool
 		printVersion         bool
-		setPort              int
+		port                 int
 	)
 
 	flag.StringVar(&configFilename, "config", "", "config file name")
-	flag.StringVar(&setClientID, "client-id", "", "set client id")
-	flag.StringVar(&setClientSecret, "client-secret", "", "set client secret")
-	flag.StringVar(&setUserID, "user-id", "", "set user id")
-	flag.StringVar(&setPassword, "password", "", "set user password")
-	flag.StringVar(&setGivenName, "given-name", "", "set user given name")
-	flag.StringVar(&setFamilyName, "family-name", "", "set user family name")
-	flag.StringVar(&setEmail, "email", "", "set user email")
-	flag.StringVar(&setDepartment, "department", "", "set user department")
-	flag.BoolVar(&generateTOTPSecret, "totp", false, "enable Time-based One-time Password (TOTP)")
-	flag.StringVar(&totpAlgorithm, "totp-algorithm", "sha256", "totp hash algorithm")
-	flag.IntVar(&totpDigits, "totp-digits", 6, "totp digits")
 	flag.IntVar(&keySize, "key-size", 2048, "generated signing key size")
 	flag.StringVar(&keyID, "key-id", "sigkey", "set generated signing key id")
 	flag.BoolVar(&saveSettings, "save", false, "save config and exit")
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")
-	flag.IntVar(&setPort, "port", 6080, "http server port")
+	flag.IntVar(&port, "port", 6080, "http server port")
 	flag.Parse()
 
 	if printVersion {
@@ -92,7 +69,7 @@ func main() {
 	}
 
 	// Set defaults
-	serverSettings = settings.NewDefault(setPort)
+	serverSettings = settings.ServerDefaults(port)
 
 	settingsFilename = fileutil.ProbeSettingsFilename(configFilename)
 
@@ -189,66 +166,6 @@ func main() {
 			slog.Error(err.Error())
 			os.Exit(1)
 		}
-	}
-
-	if setClientID != "" {
-		if serverSettings.Clients == nil {
-			serverSettings.Clients = map[string]clients.Client{}
-		}
-		var client = serverSettings.Clients[setClientID]
-		if setClientSecret != "" {
-			if secretHash, err := bcrypt.GenerateFromPassword([]byte(setClientSecret), 5); err != nil {
-				slog.Error(err.Error())
-				os.Exit(1)
-			} else {
-				client.SecretHash = string(secretHash)
-			}
-		}
-		serverSettings.Clients[setClientID] = client
-	}
-
-	if setUserID != "" {
-		if serverSettings.Users == nil {
-			serverSettings.Users = map[string]people.AuthenticPerson{}
-		}
-		var user = serverSettings.Users[setUserID]
-		if setPassword != "" {
-			if passwordHash, err := bcrypt.GenerateFromPassword([]byte(setPassword), 5); err != nil {
-				slog.Error(err.Error())
-				os.Exit(1)
-			} else {
-				user.PasswordHash = string(passwordHash)
-			}
-		}
-		if setGivenName != "" {
-			user.GivenName = setGivenName
-		}
-		if setFamilyName != "" {
-			user.FamilyName = setFamilyName
-		}
-		if setEmail != "" {
-			user.Email = setEmail
-		}
-		if setDepartment != "" {
-			user.Department = setDepartment
-		}
-		if user.PasswordHash == "" {
-			slog.Error("missing password")
-			os.Exit(1)
-		}
-		if generateTOTPSecret {
-			if kw, err := otpauth.NewKeyWrapper(serverSettings.Issuer, setUserID, totpAlgorithm, "", totpDigits); err != nil {
-				slog.Error(err.Error())
-				os.Exit(1)
-			} else {
-				user.OTPAuthURI = kw.URI()
-			}
-		}
-		serverSettings.Users[setUserID] = user
-	}
-
-	if setPort != serverSettings.Port {
-		serverSettings.Port = setPort
 	}
 
 	if saveSettings {
@@ -457,9 +374,8 @@ func main() {
 
 	http.Handle("/", middleware.Log(http.FileServer(http.FS(assets.StaticFiles))))
 
-	slog.Info(fmt.Sprintf("Listening on http://localhost:%d%s/", serverSettings.Port, basePath))
-	err = http.ListenAndServe(fmt.Sprintf(":%d", serverSettings.Port), nil)
-	if err != nil {
+	slog.Info(fmt.Sprintf("Listening on http://localhost:%d%s/", port, basePath))
+	if err = http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
 	}

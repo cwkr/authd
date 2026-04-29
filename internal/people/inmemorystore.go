@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/cwkr/authd/passwordhash"
 )
 
 type AuthenticPerson struct {
@@ -29,7 +29,7 @@ func (e inMemoryStore) Authenticate(userID, password string) (string, error) {
 	var authenticPerson, foundUser = e.users[strings.ToLower(lowercaseUserID)]
 
 	if foundUser {
-		if err := bcrypt.CompareHashAndPassword([]byte(authenticPerson.PasswordHash), []byte(password)); err != nil {
+		if err := passwordhash.Check(authenticPerson.PasswordHash, password); err != nil {
 			slog.Error(fmt.Sprintf("password comparison failed: %s", err.Error()))
 		} else {
 			return lowercaseUserID, nil

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/cwkr/authd/internal/maputil"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/cwkr/authd/passwordhash"
 )
 
 type inMemoryStore map[string]Client
@@ -21,13 +21,8 @@ func (i inMemoryStore) compareSecret(client *Client, clientSecret string) (*Clie
 	if client.SecretHash == "" {
 		return nil, ErrClientNoSecret
 	}
-	// bcrypt hash or plaintext
-	if strings.HasPrefix(client.SecretHash, "$2") {
-		if err := bcrypt.CompareHashAndPassword([]byte(client.SecretHash), []byte(clientSecret)); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrClientSecretMismatch, err)
-		}
-	} else if clientSecret != client.SecretHash {
-		return nil, ErrClientSecretMismatch
+	if err := passwordhash.Check(client.SecretHash, clientSecret); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrClientSecretMismatch, err)
 	}
 	return client, nil
 }

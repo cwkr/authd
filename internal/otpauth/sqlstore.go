@@ -10,8 +10,8 @@ import (
 	"github.com/cwkr/authd/internal/people"
 	"github.com/cwkr/authd/internal/sqlutil"
 	"github.com/cwkr/authd/internal/stringutil"
+	"github.com/cwkr/authd/passwordhash"
 	"github.com/pquerna/otp"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type sqlStore struct {
@@ -69,7 +69,7 @@ func (e sqlStore) Lookup(userID string) (*KeyWrapper, error) {
 
 func (e sqlStore) Put(userID string, keyWrapper KeyWrapper) (string, error) {
 	var recoveryCode = GenerateRecoveryCode()
-	if recoveryCodeHash, err := bcrypt.GenerateFromPassword([]byte(stringutil.StripSpaces(recoveryCode)), 11); err != nil {
+	if recoveryCodeHash, err := passwordhash.New("bcrypt", stringutil.StripSpaces(recoveryCode), 11); err != nil {
 		return "", err
 	} else {
 		// UPDATE people SET otpauth_uri = $2, recovery_code_hash = $3, last_modified = now() WHERE lower(user_id) = lower($1)
@@ -87,7 +87,7 @@ func (e sqlStore) VerifyRecoveryCode(userID, recoveryCode string) bool {
 	var row = e.dbconn.QueryRow(e.settings.RecoveryCodeQuery, userID)
 	var recoveryCodeHash string
 	if err := row.Scan(&recoveryCodeHash); err == nil {
-		if err := bcrypt.CompareHashAndPassword([]byte(recoveryCodeHash), []byte(recoveryCode)); err != nil {
+		if err := passwordhash.Check(recoveryCodeHash, recoveryCode); err != nil {
 			slog.Error(fmt.Sprintf("recovery code comparison failed: %s", err.Error()))
 		} else {
 			return true

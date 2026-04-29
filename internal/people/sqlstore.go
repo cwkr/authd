@@ -9,7 +9,7 @@ import (
 
 	"github.com/blockloop/scan/v2"
 	"github.com/cwkr/authd/internal/sqlutil"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/cwkr/authd/passwordhash"
 )
 
 type sqlStore struct {
@@ -111,7 +111,7 @@ func (p sqlStore) Authenticate(userID, password string) (string, error) {
 	var row = p.dbconn.QueryRow(p.settings.CredentialsQuery, userID)
 	var passwordHash string
 	if err := row.Scan(&realUserID, &passwordHash); err == nil {
-		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
+		if err := passwordhash.Check(passwordHash, password); err != nil {
 			slog.Error(fmt.Sprintf("password comparison failed: %s", err.Error()))
 		} else {
 			return realUserID, nil
@@ -192,7 +192,7 @@ func (p sqlStore) Put(userID string, person *Person) error {
 }
 
 func (p sqlStore) ChangePassword(userID, password string) error {
-	if passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 5); err != nil {
+	if passwordHash, err := passwordhash.New("bcrypt", password, 5); err != nil {
 		return err
 	} else {
 		// UPDATE people SET password_hash = $2, last_modified = now() WHERE lower(user_id) = lower($1)

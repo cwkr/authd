@@ -30,7 +30,6 @@ type CustomPeopleAPI struct {
 
 type Server struct {
 	Issuer                    string                            `json:"issuer"`
-	Port                      int                               `json:"port"`
 	Title                     string                            `json:"title,omitempty"`
 	Debug                     bool                              `json:"debug,omitempty"`
 	Users                     map[string]people.AuthenticPerson `json:"users,omitempty"`
@@ -69,10 +68,9 @@ type Server struct {
 	keySetProvider            keyset.Provider
 }
 
-func NewDefault(port int) *Server {
+func ServerDefaults(port int) *Server {
 	return &Server{
 		Issuer: fmt.Sprintf("http://localhost:%d", port),
-		Port:   port,
 		Defaults: oauth2.TokenSettings{
 			AccessTokenLifetime:  3_600,
 			AuthCodeLifetime:     300,
