@@ -38,6 +38,7 @@ type DiscoveryDocument struct {
 	IDTokenSigningAlgValuesSupported           []string `json:"id_token_signing_alg_values_supported"`
 	RevocationEndpoint                         string   `json:"revocation_endpoint,omitempty"`
 	RevocationEndpointAuthMethodsSupported     []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
+	SubjectTypesSupported                      []string `json:"subject_types_supported,omitempty"`
 }
 
 type discoveryDocumentHandler struct {
@@ -87,6 +88,7 @@ func (d *discoveryDocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		TokenEndpointAuthSigningAlgValuesSupported: OIDCSupportedAlgorithms,
 		CodeChallengeMethodsSupported:              []string{"S256"},
 		IDTokenSigningAlgValuesSupported:           OIDCSupportedAlgorithms,
+		SubjectTypesSupported:                      []string{"public"},
 	}
 	if d.tokenRevocationSupported {
 		discoveryDocument.RevocationEndpoint = baseURL + "/revoke"
